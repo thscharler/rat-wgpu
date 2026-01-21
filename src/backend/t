@@ -1,0 +1,50 @@
+
+    pub fn get_headless(&self) {
+        let RenderSurface::Headless(surface) = &self.wgpu_base.surface else {
+            panic!("can only be called when initialized as headless.");
+        };
+
+        let mut encoder = self
+            .wgpu_base
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor::default());
+        encoder.copy_texture_to_buffer(
+            surface.texture.as_ref().unwrap().as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: surface.buffer.as_ref().unwrap(),
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(surface.buffer_width),
+                    rows_per_image: Some(surface.height),
+                },
+            },
+            Extent3d {
+                width: surface.width,
+                height: surface.height,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.wgpu_base.queue.submit(Some(encoder.finish()));
+
+        let surface = surface.headless().expect("headless");
+        {
+            let buffer = surface.buffer.as_ref().unwrap().slice(..);
+
+            let (send, recv) = oneshot::channel();
+            buffer.map_async(wgpu::MapMode::Read, move |data| {
+                send.send(data).unwrap();
+            });
+            terminal
+                .backend()
+                .wgpu_base
+                .device
+                .poll(PollType::Wait {
+                    submission_index: None,
+                    timeout: None,
+                })
+                .unwrap();
+            recv.recv().unwrap().unwrap();
+
+            let data = buffer.get_mapped_range();
+        }
+    }

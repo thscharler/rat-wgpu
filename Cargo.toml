@@ -1,0 +1,48 @@
+[package]
+name = "rat-wgpu"
+version = "0.1.0"
+authors = ["thscharler <thscharler@gmail.com>"]
+edition = "2024"
+license = "MIT/Apache-2.0"
+readme = "readme.md"
+
+[features]
+default = ["fallback_font", "fallback_emoji_font", "fallback_symbol_font"]
+#default = ["fallback_font"]
+# Scale the resulting TUI to the exact window-size. Might look a bit stretched.
+scale_to_window = []
+# Add NotoSansMono-Regular as fallback font.
+fallback_font = []
+# Add NotoEmoji-Regular as default emoji font.
+fallback_emoji_font = []
+# Add NotoSansSymbols2-Regular as default symbol font.
+fallback_symbol_font = []
+# Support fonts with png data.
+png = ["dep:png"]
+
+[dependencies]
+rustybuzz = "0.20"
+ratatui-core = "0.1"
+log = "0.4"
+append-only-vec = "0.1"
+fontdb = "0.23"
+wgpu = "28.0"
+bytemuck = { version = "1.23", features = ["derive"] }
+raqote = { version = "0.8", default-features = false }
+evictor = { version = "0.5", default-features = false }
+indexmap = { version = "2.11", default-features = false, features = ["std"] }
+euclid = "0.22"
+bitvec = { version = "1.0", default-features = false, features = ["std"] }
+unicode-bidi = "0.3"
+unicode-properties = "0.1"
+unicode-width = "0.2"
+png = { version = "0.18", optional = true }
+
+[dev-dependencies]
+image = { version = "0.25.5", default-features = false, features = ["png"] }
+ratatui-widgets = { version = "0.3.0", default-features = false }
+serial_test = "3.2.0"
+futures-lite = "2.6.1"
+
+
+
