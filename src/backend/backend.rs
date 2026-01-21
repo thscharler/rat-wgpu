@@ -1,9 +1,9 @@
 use crate::backend::builder::{build_img_bindings, build_img_size_bindings, build_wgpu_state};
 use crate::backend::image_buffer::ImageZ;
 use crate::backend::plan_cache::PlanCache;
-use crate::backend::rasterize::rasterize_glyph;
+use crate::font::rasterize::rasterize_glyph;
 use crate::backend::surface::RenderSurface;
-use crate::backend::text_atlas::Key;
+use crate::text_atlas::Key;
 use crate::backend::{
     ImageInfo, ImgVertexMember, NULL_CELL, ONE_CELL, RenderInfo, Rendered, TextBgVertexMember,
     TextVertexMember, TuiSurface, WgpuAtlas, WgpuBase, WgpuImage, WgpuImages, WgpuPipeline,

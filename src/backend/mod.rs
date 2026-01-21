@@ -1,6 +1,6 @@
 use crate::backend::image_buffer::{ImageBuffer, ImageZ};
 use crate::backend::surface::RenderSurface;
-use crate::backend::text_atlas::{Atlas, CacheRect};
+use crate::text_atlas::{Atlas, CacheRect};
 use crate::colors::{ColorTable, Rgb};
 use crate::cursor::CursorStyle;
 use bitvec::vec::BitVec;
@@ -22,9 +22,7 @@ pub(super) mod backend;
 pub(super) mod builder;
 pub(super) mod image_buffer;
 mod plan_cache;
-mod rasterize;
 mod surface;
-mod text_atlas;
 
 /// Handle for any added image.
 ///

@@ -3,7 +3,7 @@ use crate::backend::backend::WgpuBackend;
 use crate::backend::image_buffer::ImageBuffer;
 use crate::backend::plan_cache::PlanCache;
 use crate::backend::surface::RenderSurface;
-use crate::backend::text_atlas::Atlas;
+use crate::text_atlas::Atlas;
 use crate::backend::{
     ImgPipeline, ImgVertexMember, TextBgVertexMember, TextCacheBgPipeline, TextCacheFgPipeline,
     TextVertexMember, TuiSurface, WgpuAtlas, WgpuBase, WgpuImages, WgpuPipeline, WgpuVertices,

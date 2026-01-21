@@ -1,6 +1,7 @@
 use std::fmt::{Display, Formatter};
 
 mod backend;
+mod text_atlas;
 pub mod colors;
 pub mod cursor;
 pub mod font;
