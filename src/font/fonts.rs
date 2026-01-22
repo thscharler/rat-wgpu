@@ -168,14 +168,14 @@ impl<'a> Fonts<'a> {
             font.id = self.id_count;
             self.id_count += 1;
 
-            if !font.font().is_monospaced() {
+            if !font.face().is_monospaced() {
                 warn!("Non monospace font used in add_fonts, this may cause unexpected rendering.");
             }
-            if font.font().is_italic() && font.font().is_bold() {
+            if font.face().is_italic() && font.face().is_bold() {
                 self.bold_italic.push(font);
-            } else if font.font().is_italic() {
+            } else if font.face().is_italic() {
                 self.italic.push(font);
-            } else if font.font().is_bold() {
+            } else if font.face().is_bold() {
                 self.bold.push(font);
             } else {
                 self.regular.push(font);
@@ -330,7 +330,7 @@ impl<'a> Fonts<'a> {
                     .chars()
                     .enumerate()
                     .fold((0, 0), |(mut count, _), (idx, ch)| {
-                        count += usize::from(candidate.font().glyph_index(ch).is_some());
+                        count += usize::from(candidate.face().glyph_index(ch).is_some());
                         (count, idx)
                     });
 

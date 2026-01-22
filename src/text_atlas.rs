@@ -75,11 +75,13 @@ impl Atlas {
         }
     }
 
-    pub(crate) fn update_font_box(&mut self, font_box: CellBox) {
-        self.clear();
-        self.entry_width = font_box.width * 2;
-        self.entry_height = font_box.height;
-        self.max_entries = (self.width / self.entry_width) * (self.height / self.entry_height);
+    pub(crate) fn update_font_box(&mut self, cell_box: CellBox) {
+        if cell_box.width != self.entry_width || cell_box.height != self.entry_height {
+            self.clear();
+            self.entry_width = cell_box.width * 2;
+            self.entry_height = cell_box.height;
+            self.max_entries = (self.width / self.entry_width) * (self.height / self.entry_height);
+        }
     }
 
     fn clear(&mut self) {

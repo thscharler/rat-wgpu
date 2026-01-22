@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 
 /// Some fallback font data.
 #[cfg(feature = "fallback_font")]
-static FALLBACK_DATA: &[u8] = include_bytes!("NotoSansMono-Regular.ttf");
+static FALLBACK_DATA: &[u8] = include_bytes!("CascadiaMono-Regular.ttf");
 #[cfg(feature = "fallback_font")]
 static FALLBACK_FONT: OnceLock<Font<'static>> = OnceLock::new();
 #[cfg(feature = "fallback_symbol_font")]

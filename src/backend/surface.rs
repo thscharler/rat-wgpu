@@ -75,14 +75,7 @@ impl<'s> RenderSurface<'s> {
             RenderSurface::Surface(surface) => Some(surface),
             RenderSurface::Headless(_) => None,
         }
-    }
-
-    pub(crate) fn headless(&self) -> Option<&Headless> {
-        match self {
-            RenderSurface::Surface(_) => None,
-            RenderSurface::Headless(headless) => Some(headless),
-        }
-    }
+    } 
 
     pub(crate) fn get_default_config(
         &self,

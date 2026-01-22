@@ -1,16 +1,19 @@
 use std::fmt::{Display, Formatter};
 
 mod backend;
-mod text_atlas;
 pub mod colors;
 pub mod cursor;
 pub mod font;
+pub mod image;
 pub mod postprocessor;
+mod text_atlas;
 
-pub use backend::ImageHandle;
 pub use backend::backend::WgpuBackend;
 pub use backend::builder::Builder;
-pub use backend::image_buffer::{ImageBuffer, ImageFit, ImageZ};
+
+pub mod wgpu {
+    pub use wgpu::Backends;
+}
 
 /// The metrics needed for rendering.
 #[derive(Debug, Default, Clone, Copy)]
@@ -47,7 +50,7 @@ pub enum Error {
     DeviceRequestFailed(Box<dyn std::error::Error>),
     SurfaceConfigurationRequestFailed,
     PollError(Box<dyn std::error::Error>),
-    BufferAsyncError(String)
+    BufferAsyncError(String),
 }
 
 impl Display for Error {

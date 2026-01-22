@@ -33,8 +33,12 @@ impl<'a> Font<'a> {
         })
     }
 
-    pub fn font(&'_ self) -> &'_ Face<'_> {
+    pub fn face(&'_ self) -> &'_ Face<'_> {
         &self.font
+    }
+
+    pub fn into_face(self) -> Face<'a> {
+        self.font
     }
 
     pub(crate) fn is_fallback(&self) -> bool {

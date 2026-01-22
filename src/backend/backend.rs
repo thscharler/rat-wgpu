@@ -1,9 +1,6 @@
 use crate::backend::builder::{build_img_bindings, build_img_size_bindings, build_wgpu_state};
-use crate::backend::image_buffer::ImageZ;
 use crate::backend::plan_cache::PlanCache;
-use crate::font::rasterize::rasterize_glyph;
 use crate::backend::surface::RenderSurface;
-use crate::text_atlas::Key;
 use crate::backend::{
     ImageInfo, ImgVertexMember, NULL_CELL, ONE_CELL, RenderInfo, Rendered, TextBgVertexMember,
     TextVertexMember, TuiSurface, WgpuAtlas, WgpuBase, WgpuImage, WgpuImages, WgpuPipeline,
@@ -11,9 +8,13 @@ use crate::backend::{
 };
 use crate::colors::{ColorTable, Rgb};
 use crate::cursor::{Blinking, CursorStyle};
+use crate::font::rasterize::rasterize_glyph;
 use crate::font::{Font, Fonts};
+use crate::image::{ImageCell, ImageFrame};
+use crate::image::{ImageHandle, ImageZ};
 use crate::postprocessor::{PostProcessor, PostProcessorBuilder};
-use crate::{CellBox, Error, ImageBuffer, ImageHandle};
+use crate::text_atlas::Key;
+use crate::{CellBox, Error};
 use bitvec::slice::BitSlice;
 use ratatui_core::backend::{Backend, ClearType, WindowSize};
 use ratatui_core::buffer::Cell;
@@ -283,13 +284,18 @@ impl<'s> Backend for WgpuBackend<'_, 's> {
 }
 
 impl<'f, 's> WgpuBackend<'f, 's> {
-    /// Returns the ImageBuffer.
+    /// Returns the ImageFrame.
     ///
     /// This will be used by the application to queue images for rendering.
     /// Add the image with [add_image] first, and use the ImageBuffer when
     /// rendering the UI.
-    pub fn image_buffer(&self) -> ImageBuffer {
-        self.tui_surface.image_buffer.clone()
+    ///
+    /// __Info__
+    ///
+    /// You can keep the ImageFrame around. It's internals will update
+    /// if cell_box or window-size changes.
+    pub fn image_frame(&self) -> ImageFrame {
+        self.tui_surface.image_frame.clone()
     }
 
     /// Background color or Color::Reset.
@@ -396,6 +402,7 @@ impl<'f, 's> WgpuBackend<'f, 's> {
             &mut self.tui_surface,
             &mut self.rendered,
             &mut self.wgpu_base,
+            &mut self.wgpu_atlas,
             self.wgpu_post_process.as_mut(),
         );
     }
@@ -433,18 +440,13 @@ impl<'f, 's> WgpuBackend<'f, 's> {
     /// aspect ratio for its glyphs.
     pub fn update_fonts(&mut self, new_fonts: Fonts<'f>) {
         self.fonts = new_fonts;
-        self.tui_surface.dirty_rows.clear();
-        self.tui_surface.dirty_cells.clear();
-        self.wgpu_atlas
-            .cached
-            .update_font_box(self.fonts.cell_box());
-        *self.tui_surface.image_buffer.cell_box.lock().expect("lock") = self.fonts.cell_box();
 
         rebuild_surface(
             self.fonts.cell_box(),
             &mut self.tui_surface,
             &mut self.rendered,
             &mut self.wgpu_base,
+            &mut self.wgpu_atlas,
             self.wgpu_post_process.as_mut(),
         );
     }
@@ -458,18 +460,13 @@ impl<'f, 's> WgpuBackend<'f, 's> {
     pub fn update_font_vec(&mut self, new_fonts: Vec<Font<'f>>) {
         self.fonts.clear_fonts();
         self.fonts.add_fonts(new_fonts);
-        self.tui_surface.dirty_rows.clear();
-        self.tui_surface.dirty_cells.clear();
-        self.wgpu_atlas
-            .cached
-            .update_font_box(self.fonts.cell_box());
-        *self.tui_surface.image_buffer.cell_box.lock().expect("lock") = self.fonts.cell_box();
 
         rebuild_surface(
             self.fonts.cell_box(),
             &mut self.tui_surface,
             &mut self.rendered,
             &mut self.wgpu_base,
+            &mut self.wgpu_atlas,
             self.wgpu_post_process.as_mut(),
         );
     }
@@ -480,19 +477,14 @@ impl<'f, 's> WgpuBackend<'f, 's> {
     /// the screen the next time [`WgpuBackend::flush`] is called.
     /// A call to [ratatui_core::terminal::Terminal::draw] will do this.
     pub fn update_font_size(&mut self, new_font_size: u32) {
-        self.tui_surface.dirty_rows.clear();
-        self.tui_surface.dirty_cells.clear();
         self.fonts.set_size_px(new_font_size);
-        self.wgpu_atlas
-            .cached
-            .update_font_box(self.fonts.cell_box());
-        *self.tui_surface.image_buffer.cell_box.lock().expect("lock") = self.fonts.cell_box();
 
         rebuild_surface(
             self.fonts.cell_box(),
             &mut self.tui_surface,
             &mut self.rendered,
             &mut self.wgpu_base,
+            &mut self.wgpu_atlas,
             self.wgpu_post_process.as_mut(),
         );
     }
@@ -591,13 +583,8 @@ impl<'f, 's> WgpuBackend<'f, 's> {
             },
         );
 
-        let mut image_size = self
-            .tui_surface
-            .image_buffer
-            .image_size
-            .lock()
-            .expect("lock");
-        image_size.insert(id, (width, height));
+        let mut image_buffer = self.tui_surface.image_frame.buffer_mut();
+        image_buffer.image_size.insert(id, (width, height));
 
         ImageHandle { id, dropped }
     }
@@ -678,6 +665,7 @@ fn rebuild_surface(
     tui_surface: &mut TuiSurface,
     rendered: &mut Vec<Rendered>,
     wgpu_base: &mut WgpuBase,
+    wgpu_atlas: &mut WgpuAtlas,
     wgpu_post_process: &mut dyn PostProcessor,
 ) {
     let width = wgpu_base.surface_config.width;
@@ -688,6 +676,8 @@ fn rebuild_surface(
 
     let chars_wide = width / cell_box.width;
     let chars_high = height / cell_box.height;
+
+    wgpu_atlas.cached.update_font_box(cell_box);
 
     tui_surface.images.clear();
     tui_surface.cells.clear();
@@ -701,6 +691,10 @@ fn rebuild_surface(
     tui_surface.dirty_rows.clear();
     tui_surface.dirty_cells.clear();
     tui_surface.dirty_img.clear();
+
+    let mut image_buffer = tui_surface.image_frame.buffer_mut();
+    image_buffer.cell_box = cell_box;
+    image_buffer.area = ratatui_core::layout::Rect::new(0, 0, chars_wide as u16, chars_high as u16);
 
     rendered.clear();
 
@@ -725,10 +719,10 @@ fn drop_images(tui_surface: &mut TuiSurface, wgpu_images: &mut WgpuImages) {
             dropped.push(*img_id);
         }
     }
-    let mut image_size = tui_surface.image_buffer.image_size.lock().expect("lock");
+    let mut image_buffer = tui_surface.image_frame.buffer_mut();
     for img_id in dropped {
         wgpu_images.img.remove(&img_id);
-        image_size.remove(&img_id);
+        image_buffer.image_size.remove(&img_id);
     }
 }
 
@@ -945,7 +939,7 @@ fn render_img(
         );
         text_render_pass.set_bind_group(1, &img_size_bindings, &[]);
 
-        let img_texture = images.img.get(&img_info.id).expect("image");
+        let img_texture = images.img.get(&img_info.image_id).expect("image");
         let img_bindings = build_img_bindings(
             &pipeline.img_compositor,
             &device,
@@ -992,15 +986,21 @@ fn draw_tui(
     {
         let cell_box = fonts.cell_box();
         let mut images = Vec::new();
-        let mut image_buffer = tui_surface.image_buffer.images.lock().expect("lock");
-        for (img_id, view_rect, z, transform) in image_buffer.iter() {
-            let img = wgpu_images.img.get(img_id).expect("image");
+        let mut image_buffer = tui_surface.image_frame.buffer_mut();
+        for ImageCell {
+            image_id,
+            view_rect,
+            z,
+            tr,
+        } in image_buffer.images.iter()
+        {
+            let img = wgpu_images.img.get(image_id).expect("image");
             let img_info = ImageInfo {
-                id: *img_id,
+                image_id: *image_id,
                 img_size: (img.width, img.height),
                 view_rect: *view_rect,
                 z: *z,
-                uv_transform: *transform,
+                uv_transform: *tr,
             };
 
             images.push(img_info);
@@ -1009,7 +1009,7 @@ fn draw_tui(
             if let Some(pos) = tui_surface
                 .images
                 .iter()
-                .position(|test| test.id == *img_id && test.view_rect == *view_rect)
+                .position(|test| test.image_id == *image_id && test.view_rect == *view_rect)
             {
                 let test = tui_surface.images[pos];
                 if test.z != img_info.z || test.uv_transform != img_info.uv_transform {
@@ -1040,7 +1040,7 @@ fn draw_tui(
         }
 
         // clear communication buffer
-        image_buffer.clear();
+        image_buffer.images.clear();
 
         // overlapping cells of removed or dirty images must be marked as dirty.
         for img_info in tui_surface
@@ -1212,7 +1212,7 @@ fn flush_tui(
                         &tmp_rowbuf,
                         &tmp_rowbuf_to_cell,
                         shape_with_plan(
-                            current_font.font(),
+                            current_font.face(),
                             tmp_plan_cache.get(current_font_id, current_font, &mut buffer),
                             buffer,
                         ),
@@ -1259,7 +1259,7 @@ fn flush_tui(
             &tmp_rowbuf,
             tmp_rowbuf_to_cell,
             shape_with_plan(
-                current_font.font(),
+                current_font.face(),
                 tmp_plan_cache.get(current_font_id, current_font, &mut buffer),
                 buffer,
             ),
@@ -1617,7 +1617,7 @@ fn shape(
     wgpu_atlas: &mut WgpuAtlas,
     queue: &Queue,
 ) -> UnicodeBuffer {
-    let metrics = font.font();
+    let metrics = font.face();
     let advance_scale = cell_box.scale;
 
     let mut x = 0;

@@ -1,8 +1,8 @@
-use crate::backend::image_buffer::{ImageBuffer, ImageZ};
 use crate::backend::surface::RenderSurface;
-use crate::text_atlas::{Atlas, CacheRect};
 use crate::colors::{ColorTable, Rgb};
 use crate::cursor::CursorStyle;
+use crate::image::{ImageFrame, ImageZ};
+use crate::text_atlas::{Atlas, CacheRect};
 use bitvec::vec::BitVec;
 use indexmap::IndexMap;
 use raqote::Transform;
@@ -12,7 +12,7 @@ use rustybuzz::ttf_parser::GlyphId;
 use std::collections::HashMap;
 use std::hash::RandomState;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use wgpu::{
     BindGroup, BindGroupLayout, Buffer, Device, Queue, RenderPipeline, Sampler,
     SurfaceConfiguration, Texture, TextureView,
@@ -20,25 +20,8 @@ use wgpu::{
 
 pub(super) mod backend;
 pub(super) mod builder;
-pub(super) mod image_buffer;
 mod plan_cache;
 mod surface;
-
-/// Handle for any added image.
-///
-/// When the handle is dropped, the backing texture will be dropped after
-/// the next flush().
-#[derive(Debug, Default, Clone)]
-pub struct ImageHandle {
-    id: usize,
-    dropped: Arc<AtomicBool>,
-}
-
-impl Drop for ImageHandle {
-    fn drop(&mut self) {
-        self.dropped.store(true, Ordering::Release)
-    }
-}
 
 const NULL_CELL: Cell = {
     let mut c = Cell::new("");
@@ -64,7 +47,7 @@ struct RenderInfo {
 
 #[derive(Debug, Clone, Copy)]
 struct ImageInfo {
-    id: usize,
+    image_id: usize,
     view_rect: (u32, u32, u32, u32),
 
     img_size: (u32, u32),
@@ -81,7 +64,7 @@ type Rendered = IndexMap<(i32, i32, GlyphId), RenderInfo, RandomState>;
 struct TuiSurface {
     // communication with the application. can run in parallel
     // with ratatui's draw() function.
-    image_buffer: ImageBuffer,
+    image_frame: ImageFrame,
 
     // current images
     images: Vec<ImageInfo>,

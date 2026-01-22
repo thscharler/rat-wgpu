@@ -1,9 +1,7 @@
 use crate::Error;
 use crate::backend::backend::WgpuBackend;
-use crate::backend::image_buffer::ImageBuffer;
 use crate::backend::plan_cache::PlanCache;
 use crate::backend::surface::RenderSurface;
-use crate::text_atlas::Atlas;
 use crate::backend::{
     ImgPipeline, ImgVertexMember, TextBgVertexMember, TextCacheBgPipeline, TextCacheFgPipeline,
     TextVertexMember, TuiSurface, WgpuAtlas, WgpuBase, WgpuImages, WgpuPipeline, WgpuVertices,
@@ -11,8 +9,10 @@ use crate::backend::{
 use crate::colors::ColorTable;
 use crate::cursor::CursorStyle;
 use crate::font::{Font, FontData, Fonts};
+use crate::image::{ImageBuffer, ImageFrame};
 use crate::postprocessor::PostProcessorBuilder;
 use crate::postprocessor::default::DefaultPostProcessorBuilder;
+use crate::text_atlas::Atlas;
 use log::info;
 use ratatui_core::style::Color;
 use rustybuzz::UnicodeBuffer;
@@ -497,6 +497,9 @@ where
         let cell_box = fonts.cell_box();
         let font_count = fonts.count();
 
+        let chars_wide = width / cell_box.width;
+        let chars_high = height / cell_box.height;
+
         let post_process = self
             .postprocessor
             .compile(&device, &wgpu_view, &surface_config);
@@ -504,18 +507,26 @@ where
         Ok(WgpuBackend {
             fonts: self.fonts.expect("fonts"),
             tui_surface: TuiSurface {
-                image_buffer: ImageBuffer {
-                    cell_box: Arc::new(Mutex::new(cell_box)),
-                    image_size: Arc::new(Mutex::new(Default::default())),
-                    images: Default::default(),
+                image_frame: ImageFrame {
+                    buffer: Arc::new(Mutex::new(ImageBuffer {
+                        area: ratatui_core::layout::Rect::new(
+                            0,
+                            0,
+                            chars_wide as u16,
+                            chars_high as u16,
+                        ),
+                        cell_box,
+                        image_size: Default::default(),
+                        images: Default::default(),
+                    })),
                 },
-                images: vec![],
-                cells: vec![],
-                cell_font: vec![],
-                cell_remap: vec![],
+                images: Default::default(),
+                cells: Default::default(),
+                cell_font: Default::default(),
+                cell_remap: Default::default(),
                 dirty_rows: Default::default(),
                 dirty_cells: Default::default(),
-                dirty_img: vec![],
+                dirty_img: Default::default(),
                 fast_blinking: Default::default(),
                 slow_blinking: Default::default(),
                 cursor: (0, 0),
@@ -534,12 +545,12 @@ where
                 slow_blink_divisor: self.slow_blink,
                 slow_blink_showing: true,
             },
-            rendered: vec![],
+            rendered: Default::default(),
 
             tmp_plan_cache: PlanCache::new(font_count.max(2)),
             tmp_buffer: UnicodeBuffer::new(),
             tmp_rowbuf: String::new(),
-            tmp_rowbuf_to_cell: vec![],
+            tmp_rowbuf_to_cell: Default::default(),
 
             wgpu_base: WgpuBase {
                 surface,
@@ -549,12 +560,12 @@ where
                 text_dest_view: wgpu_view,
             },
             wgpu_vertices: WgpuVertices {
-                bg_vertices: vec![],
-                text_indices: vec![],
-                text_vertices: vec![],
-                img_render: vec![],
-                img_indices: vec![],
-                img_vertices: vec![],
+                bg_vertices: Default::default(),
+                text_indices: Default::default(),
+                text_vertices: Default::default(),
+                img_render: Default::default(),
+                img_indices: Default::default(),
+                img_vertices: Default::default(),
             },
             wgpu_atlas: WgpuAtlas {
                 cached: Atlas::new(cell_box, CACHE_WIDTH, CACHE_HEIGHT),

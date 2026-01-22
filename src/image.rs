@@ -1,9 +1,31 @@
 use crate::CellBox;
-use crate::backend::ImageHandle;
 use euclid::Vector2D;
 use raqote::Transform;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard};
+
+/// Handle for any added image.
+///
+/// When the handle is dropped, the backing texture will be dropped after
+/// the next flush().
+#[derive(Debug, Default, Clone)]
+pub struct ImageHandle {
+    pub(crate) id: usize,
+    pub(crate) dropped: Arc<AtomicBool>,
+}
+
+impl ImageHandle {
+    pub fn id(&self) -> usize {
+        self.id
+    }
+}
+
+impl Drop for ImageHandle {
+    fn drop(&mut self) {
+        self.dropped.store(true, Ordering::Release)
+    }
+}
 
 /// Positioning of the image relative to the text in the cells.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -55,32 +77,102 @@ pub enum ImageFit {
     FitVerticalEnd,
 }
 
+/// The rendered data for one image.
+#[derive(Debug, Clone)]
+pub struct ImageCell {
+    pub image_id: usize,
+    pub view_rect: (u32, u32, u32, u32),
+    pub z: ImageZ,
+    pub tr: Transform,
+}
+
+/// The ImageFrame works analogous to the [ratatui_core::terminal::Frame].
+/// You tell it what images should be rendered for one render-pass.
 ///
-/// An image-buffer that can be used in parallel to rendering the TUI.
+/// During flush() it will check the data and render what is necessary.
 ///
 #[derive(Debug, Default, Clone)]
+pub struct ImageFrame {
+    pub(crate) buffer: Arc<Mutex<ImageBuffer>>,
+}
+
+impl ImageFrame {
+    pub fn buffer_mut(&'_ self) -> MutexGuard<'_, ImageBuffer> {
+        self.buffer.lock().expect("lock")
+    }
+}
+
+#[derive(Debug, Default, Clone)]
 pub struct ImageBuffer {
+    // The buffer area.
+    pub(crate) area: ratatui_core::layout::Rect,
     // cell-size. this is updated whenever the font-size or font is changed.
-    pub(super) cell_box: Arc<Mutex<CellBox>>,
+    pub(crate) cell_box: CellBox,
     // information for all available images.
-    pub(super) image_size: Arc<Mutex<HashMap<usize, (u32, u32)>>>,
+    pub(crate) image_size: HashMap<usize, (u32, u32)>,
     // actual render-queue. this will be read when flush() is called and
     // renders the images.
     // - image-id
     // - target rect (x,y,w,h)
     // - transform to access the image-texture
-    pub(super) images: Arc<Mutex<Vec<(usize, (u32, u32, u32, u32), ImageZ, Transform)>>>,
+    pub(crate) images: Vec<ImageCell>,
 }
 
 impl ImageBuffer {
+    pub fn new(
+        area: ratatui_core::layout::Rect,
+        cell_box: CellBox,
+        image_size: HashMap<usize, (u32, u32)>,
+    ) -> Self {
+        Self {
+            area,
+            cell_box,
+            image_size,
+            images: Default::default(),
+        }
+    }
+
+    /// Create a new ImageBuffer with the same cell_box and image-sizes,
+    /// but a new area and an empty image list.
+    pub fn derive(&self, area: ratatui_core::layout::Rect) -> Self {
+        Self {
+            area,
+            cell_box: self.cell_box,
+            image_size: self.image_size.clone(),
+            images: Default::default(),
+        }
+    }
+
+    // todo: merging??
+
+    /// Get the area of the buffer in cells.
+    pub fn area(&self) -> ratatui_core::layout::Rect {
+        self.area
+    }
+
+    /// Get the area of the buffer in pixel.
+    pub fn area_px(&self) -> (u32, u32, u32, u32) {
+        (
+            self.area.x as u32 * self.cell_box.width,
+            self.area.y as u32 * self.cell_box.height,
+            self.area.width as u32 * self.cell_box.width,
+            self.area.height as u32 * self.cell_box.height,
+        )
+    }
+
     /// Get the active FontBox
     pub fn cell_box(&self) -> CellBox {
-        *self.cell_box.lock().expect("lock")
+        self.cell_box
     }
 
     /// Get the image-size in px for an added image.
     pub fn image_size(&self, id: &ImageHandle) -> Option<(u32, u32)> {
-        self.image_size.lock().expect("lock").get(&id.id).cloned()
+        self.image_size.get(&id.id).cloned()
+    }
+
+    /// Get the rendered images.
+    pub fn images(&self) -> &[ImageCell] {
+        &self.images
     }
 
     /// Convert the ratatui Rect to a screen-area.
@@ -102,53 +194,57 @@ impl ImageBuffer {
     /// To get an ImageHandle add the image first with [add_image]. Add image
     /// will create the texture for the image.
     pub fn render_image(
-        &self,
+        &mut self,
         id: &ImageHandle,
-        area: (u32, u32, u32, u32),
+        rect: (u32, u32, u32, u32),
         z: ImageZ,
         fit: ImageFit,
     ) {
-        let mut images = self.images.lock().expect("lock");
         let tr = match fit {
             ImageFit::Fill => Transform::default(),
             ImageFit::FitStart => {
                 let img = self.image_size(id).expect("img1");
-                self.scale_to_fit(img, (area.2, area.3), 0, 0)
+                self.scale_to_fit(img, (rect.2, rect.3), 0, 0)
             }
             ImageFit::FitCenter => {
                 let img = self.image_size(id).expect("img1");
-                self.scale_to_fit(img, (area.2, area.3), 0, 1)
+                self.scale_to_fit(img, (rect.2, rect.3), 0, 1)
             }
             ImageFit::FitEnd => {
                 let img = self.image_size(id).expect("img1");
-                self.scale_to_fit(img, (area.2, area.3), 0, 2)
+                self.scale_to_fit(img, (rect.2, rect.3), 0, 2)
             }
             ImageFit::HorizontalStart => {
                 let img = self.image_size(id).expect("img1");
-                self.scale_to_fit(img, (area.2, area.3), 1, 0)
+                self.scale_to_fit(img, (rect.2, rect.3), 1, 0)
             }
             ImageFit::HorizontalCenter => {
                 let img = self.image_size(id).expect("img1");
-                self.scale_to_fit(img, (area.2, area.3), 1, 1)
+                self.scale_to_fit(img, (rect.2, rect.3), 1, 1)
             }
             ImageFit::HorizontalEnd => {
                 let img = self.image_size(id).expect("img1");
-                self.scale_to_fit(img, (area.2, area.3), 1, 2)
+                self.scale_to_fit(img, (rect.2, rect.3), 1, 2)
             }
             ImageFit::FitVerticalStart => {
                 let img = self.image_size(id).expect("img1");
-                self.scale_to_fit(img, (area.2, area.3), 2, 0)
+                self.scale_to_fit(img, (rect.2, rect.3), 2, 0)
             }
             ImageFit::FitVerticalCenter => {
                 let img = self.image_size(id).expect("img1");
-                self.scale_to_fit(img, (area.2, area.3), 2, 1)
+                self.scale_to_fit(img, (rect.2, rect.3), 2, 1)
             }
             ImageFit::FitVerticalEnd => {
                 let img = self.image_size(id).expect("img1");
-                self.scale_to_fit(img, (area.2, area.3), 2, 2)
+                self.scale_to_fit(img, (rect.2, rect.3), 2, 2)
             }
         };
-        images.push((id.id, area, z, tr));
+        self.images.push(ImageCell {
+            image_id: id.id(),
+            view_rect: rect,
+            z,
+            tr,
+        });
     }
 
     /// Scale the image for the best fit in the given area.
@@ -210,13 +306,17 @@ impl ImageBuffer {
     /// To get an ImageHandle add the image first with [add_image]. Add image
     /// will create the texture for the image.
     pub fn render_image_tr(
-        &self,
+        &mut self,
         id: &ImageHandle,
-        area: (u32, u32, u32, u32),
+        rect: (u32, u32, u32, u32),
         z: ImageZ,
         uv_transform: Transform,
     ) {
-        let mut images = self.images.lock().expect("lock");
-        images.push((id.id, area, z, uv_transform));
+        self.images.push(ImageCell {
+            image_id: id.id(),
+            view_rect: rect,
+            z,
+            tr: uv_transform,
+        });
     }
 }
