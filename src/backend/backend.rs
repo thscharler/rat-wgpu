@@ -1409,7 +1409,9 @@ fn append_rendered(
     vertices: &mut WgpuVertices,
 ) {
     for (
-        (x, y, _),
+        x,
+        y,
+        _,
         RenderInfo {
             cached,
             fg,
@@ -1719,8 +1721,10 @@ fn shape(
         };
 
         if cached.cached() {
-            rendered[cell_idx].insert(
-                (basex, basey, GlyphId(info.glyph_id as _)),
+            rendered[cell_idx].push((
+                basex,
+                basey,
+                GlyphId(info.glyph_id as _),
                 RenderInfo {
                     cached: *cached,
                     fg: cell.fg,
@@ -1733,7 +1737,7 @@ fn shape(
                     cursor_pos_min: cursor_pos.0 as u16,
                     cursor_pos_max: cursor_pos.1 as u16,
                 },
-            );
+            ));
 
             continue;
         }
@@ -1759,8 +1763,10 @@ fn shape(
         // remember colored flag for the glyph.
         wgpu_atlas.cached.update_colored(&key, cached.color);
 
-        rendered[cell_idx].insert(
-            (basex, basey, GlyphId(info.glyph_id as _)),
+        rendered[cell_idx].push((
+            basex,
+            basey,
+            GlyphId(info.glyph_id as _),
             RenderInfo {
                 cached,
                 fg: cell.fg,
@@ -1773,7 +1779,7 @@ fn shape(
                 cursor_pos_min: cursor_pos.0 as u16,
                 cursor_pos_max: cursor_pos.1 as u16,
             },
-        );
+        ));
 
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {

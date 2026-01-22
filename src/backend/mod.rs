@@ -4,13 +4,11 @@ use crate::cursor::CursorStyle;
 use crate::image::{ImageFrame, ImageZ};
 use crate::text_atlas::{Atlas, CacheRect};
 use bitvec::vec::BitVec;
-use indexmap::IndexMap;
 use raqote::Transform;
 use ratatui_core::buffer::Cell;
 use ratatui_core::style::Modifier;
 use rustybuzz::ttf_parser::GlyphId;
 use std::collections::HashMap;
-use std::hash::RandomState;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use wgpu::{
@@ -58,8 +56,7 @@ struct ImageInfo {
 /// Map from (x, y, glyph) -> (cell index, cache entry).
 /// We use an IndexMap because we want a consistent rendering order for
 /// vertices.
-// todo: need indexmap?
-type Rendered = IndexMap<(i32, i32, GlyphId), RenderInfo, RandomState>;
+type Rendered = Vec<(i32, i32, GlyphId, RenderInfo)>;
 
 struct TuiSurface {
     // communication with the application. can run in parallel
