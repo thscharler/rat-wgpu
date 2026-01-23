@@ -583,7 +583,8 @@ impl<'f, 's> WgpuBackend<'f, 's> {
             },
         );
 
-        let mut image_buffer = self.tui_surface.image_frame.buffer_mut();
+        let image_buffer = self.tui_surface.image_frame.buffer();
+        let mut image_buffer = image_buffer.lock().expect("lock");
         image_buffer.image_size.insert(id, (width, height));
 
         ImageHandle { id, dropped }
@@ -692,7 +693,8 @@ fn rebuild_surface(
     tui_surface.dirty_cells.clear();
     tui_surface.dirty_img.clear();
 
-    let mut image_buffer = tui_surface.image_frame.buffer_mut();
+    let image_buffer = tui_surface.image_frame.buffer();
+    let mut image_buffer = image_buffer.lock().expect("lock");
     image_buffer.cell_box = cell_box;
     image_buffer.area = ratatui_core::layout::Rect::new(0, 0, chars_wide as u16, chars_high as u16);
 
@@ -719,7 +721,8 @@ fn drop_images(tui_surface: &mut TuiSurface, wgpu_images: &mut WgpuImages) {
             dropped.push(*img_id);
         }
     }
-    let mut image_buffer = tui_surface.image_frame.buffer_mut();
+    let image_buffer = tui_surface.image_frame.buffer();
+    let mut image_buffer = image_buffer.lock().expect("lock");
     for img_id in dropped {
         wgpu_images.img.remove(&img_id);
         image_buffer.image_size.remove(&img_id);
@@ -978,7 +981,8 @@ fn draw_tui(
     // image preparation
     {
         let mut images = Vec::new();
-        let mut image_buffer = tui_surface.image_frame.buffer_mut();
+        let image_buffer = tui_surface.image_frame.buffer();
+        let mut image_buffer = image_buffer.lock().expect("lock");
         for ImageCell {
             image_id,
             view_rect,

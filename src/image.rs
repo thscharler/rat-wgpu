@@ -3,7 +3,7 @@ use euclid::Vector2D;
 use raqote::Transform;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 
 /// Handle for any added image.
 ///
@@ -139,8 +139,8 @@ pub struct ImageFrame {
 }
 
 impl ImageFrame {
-    pub fn buffer_mut(&'_ self) -> MutexGuard<'_, ImageBuffer> {
-        self.buffer.lock().expect("lock")
+    pub fn buffer(&self) -> Arc<Mutex<ImageBuffer>> {
+        self.buffer.clone()
     }
 }
 
