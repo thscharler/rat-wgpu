@@ -1,4 +1,5 @@
 use crate::CellBox;
+use crate::util::intersect;
 use euclid::Vector2D;
 use raqote::Transform;
 use std::collections::HashMap;
@@ -199,30 +200,13 @@ impl ImageBuffer {
             shift.1 as i32 * self.cell_box.height as i32,
         );
         let clip = self.rect_px(clip);
-        // TODO: clip
 
         for mut img in buf.images {
             img.view_rect.0 += shift.0;
             img.view_rect.1 += shift.1;
             img.view_clip.0 += shift.0;
             img.view_clip.1 += shift.1;
-
-            // let cx0 = img.view_clip.0;
-            // let cy0 = img.view_clip.1;
-            // let cx1 = img.view_clip.0 + img.view_clip.2;
-            // let cy1 = img.view_clip.1 + img.view_clip.3;
-            //
-            // let vx0 = clip.0;
-            // let vy0 = clip.1;
-            // let vx1 = clip.0 + clip.2;
-            // let vy1 = clip.1 + clip.3;
-            //
-            // let x0 = if cx0 < vx0 { vx0 } else { cx0 };
-            // let y0 = if cy0 < vy0 { vy0 } else { cy0 };
-            // let x1 = if cx1 > vx1 { vx1 } else { cx1 };
-            // let y1 = if cy1 > vy1 { vy1 } else { cy1 };
-            //
-            // img.view_clip = (x0, y0, x1 - x0, y1 - y0);
+            img.view_clip = intersect(img.view_clip, clip).unwrap_or_default();
 
             self.images.push(img);
         }
@@ -322,14 +306,13 @@ impl ImageBuffer {
             Transform::default()
         };
 
-        // let clip = if let Some(clip) = arg.view_clip {
-        //     clip
-        // } else if let Some(area) = arg.view_clip_area {
-        //     self.rect_px(area)
-        // } else {
-        //     rect
-        // };
-        let clip = rect;
+        let clip = if let Some(clip) = arg.view_clip {
+            clip
+        } else if let Some(area) = arg.view_clip_area {
+            self.rect_px(area)
+        } else {
+            rect
+        };
 
         self.images.push(ImageCell {
             image_id: id.id(),

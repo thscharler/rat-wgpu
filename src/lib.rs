@@ -7,6 +7,7 @@ pub mod font;
 pub mod image;
 pub mod postprocessor;
 mod text_atlas;
+pub(crate) mod util;
 
 pub use backend::backend::WgpuBackend;
 pub use backend::builder::Builder;

@@ -14,6 +14,7 @@ use crate::image::ImageHandle;
 use crate::image::{ImageCell, ImageFrame};
 use crate::postprocessor::{PostProcessor, PostProcessorBuilder};
 use crate::text_atlas::Key;
+use crate::util::clip_uv;
 use crate::{CellBox, Error};
 use bitvec::slice::BitSlice;
 use ratatui_core::backend::{Backend, ClearType, WindowSize};
@@ -917,20 +918,11 @@ fn render_img(
             ]]),
         });
 
-        // let view_width = img_info.view_rect.2 as f32;
-        // let view_height = img_info.view_rect.3 as f32;
-        //
-        // let clip_x0 = (img_info.view_clip.0 - img_info.view_rect.0) as f32;
-        // let clip_y0 = (img_info.view_clip.1 - img_info.view_rect.1) as f32;
-        // let clip_x1 =
-        //     (img_info.view_clip.0 + img_info.view_clip.2 as i32 - img_info.view_rect.0) as f32;
-        // let clip_y1 =
-        //     (img_info.view_clip.1 + img_info.view_clip.3 as i32 - img_info.view_rect.1) as f32;
-
+        let uv = clip_uv(img_info.view_rect, img_info.view_clip).unwrap_or_default();
         let uv_clip_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Image Clip Uniforms Buffer"),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            contents: bytemuck::cast_slice(&[0.0f32, 0.0f32, 1.0f32, 1.0f32]),
+            contents: bytemuck::cast_slice(&uv),
         });
 
         let img_texture = images.img.get(&img_info.image_id).expect("image");
