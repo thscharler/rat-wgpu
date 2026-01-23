@@ -23,7 +23,7 @@ pub trait PostProcessorBuilder {
 /// A pipeline for post-processing rendered text.
 pub trait PostProcessor: Any {
     /// Map the screen-coordinates to cell-coordinates.
-    fn map_to_cell(&self, scr_x: u32, scr_y: u32, font_box: CellBox) -> (u16, u16);
+    fn map_to_cell(&self, scr_x: i32, scr_y: i32, font_box: CellBox) -> (u16, u16);
 
     /// Called after the drawing dimensions have changed (e.g. the surface was
     /// resized).

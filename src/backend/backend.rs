@@ -1,4 +1,4 @@
-use crate::backend::builder::{build_img_bindings, build_img_size_bindings, build_wgpu_state};
+use crate::backend::builder::{build_img_bindings, build_wgpu_state};
 use crate::backend::plan_cache::PlanCache;
 use crate::backend::surface::RenderSurface;
 use crate::backend::{
@@ -10,8 +10,8 @@ use crate::colors::{ColorTable, Rgb};
 use crate::cursor::{Blinking, CursorStyle};
 use crate::font::rasterize::rasterize_glyph;
 use crate::font::{Font, Fonts};
+use crate::image::ImageHandle;
 use crate::image::{ImageCell, ImageFrame};
-use crate::image::{ImageHandle, ImageZ};
 use crate::postprocessor::{PostProcessor, PostProcessorBuilder};
 use crate::text_atlas::Key;
 use crate::{CellBox, Error};
@@ -331,7 +331,7 @@ impl<'f, 's> WgpuBackend<'f, 's> {
     }
 
     /// Map a physical cursor position to a col/row position.
-    pub fn pos_to_cell(&self, pos: (u32, u32)) -> (u16, u16) {
+    pub fn pos_to_cell(&self, pos: (i32, i32)) -> (u16, u16) {
         let font_box = self.fonts.cell_box();
         if font_box.width == 0 || font_box.height == 0 {
             // might happen during resize or before the first render.
@@ -822,7 +822,7 @@ fn render(
                 &base.device,
                 &mut text_render_pass,
                 pipeline,
-                ImageZ::BelowText,
+                true,
                 images,
                 &img_indices,
                 &img_vertices,
@@ -848,7 +848,7 @@ fn render(
                 &base.device,
                 &mut text_render_pass,
                 pipeline,
-                ImageZ::AboveText,
+                false,
                 images,
                 &img_indices,
                 &img_vertices,
@@ -881,7 +881,7 @@ fn render_img(
     device: &Device,
     text_render_pass: &mut RenderPass,
     pipeline: &WgpuPipeline,
-    z: ImageZ,
+    below_text: bool,
     images: &WgpuImages,
     img_indices: &Buffer,
     img_vertices: &Buffer,
@@ -895,26 +895,10 @@ fn render_img(
     for (n, img_info) in img_render.iter().enumerate() {
         let n = n as u32;
 
-        if img_info.z != z {
+        if img_info.below_text != below_text {
             continue;
         }
 
-        let img_size_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("Image Size Uniforms Buffer"),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            contents: bytemuck::cast_slice(&[
-                img_info.img_size.0 as f32,
-                img_info.img_size.1 as f32,
-            ]),
-        });
-        let view_size_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("View Size Uniforms Buffer"),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            contents: bytemuck::cast_slice(&[
-                img_info.view_rect.2 as f32,
-                img_info.view_rect.3 as f32,
-            ]),
-        });
         let uv_transform_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Image UV-Transform Uniforms Buffer"),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
@@ -930,14 +914,21 @@ fn render_img(
             ]]),
         });
 
-        let img_size_bindings = build_img_size_bindings(
-            &pipeline.img_compositor,
-            &device,
-            &img_size_buffer,
-            &view_size_buffer,
-            &uv_transform_buffer,
-        );
-        text_render_pass.set_bind_group(1, &img_size_bindings, &[]);
+        // let view_width = img_info.view_rect.2 as f32;
+        // let view_height = img_info.view_rect.3 as f32;
+        //
+        // let clip_x0 = (img_info.view_clip.0 - img_info.view_rect.0) as f32;
+        // let clip_y0 = (img_info.view_clip.1 - img_info.view_rect.1) as f32;
+        // let clip_x1 =
+        //     (img_info.view_clip.0 + img_info.view_clip.2 as i32 - img_info.view_rect.0) as f32;
+        // let clip_y1 =
+        //     (img_info.view_clip.1 + img_info.view_clip.3 as i32 - img_info.view_rect.1) as f32;
+
+        let uv_clip_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Image Clip Uniforms Buffer"),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            contents: bytemuck::cast_slice(&[0.0f32, 0.0f32, 1.0f32, 1.0f32]),
+        });
 
         let img_texture = images.img.get(&img_info.image_id).expect("image");
         let img_bindings = build_img_bindings(
@@ -945,9 +936,11 @@ fn render_img(
             &device,
             &pipeline.sampler,
             &img_texture.texture,
+            &uv_transform_buffer,
+            &uv_clip_buffer,
         );
 
-        text_render_pass.set_bind_group(2, &img_bindings, &[]);
+        text_render_pass.set_bind_group(1, &img_bindings, &[]);
 
         text_render_pass.draw_indexed(n * 6..(n + 1) * 6, 0, 0..1);
     }
@@ -984,13 +977,13 @@ fn draw_tui(
 
     // image preparation
     {
-        let cell_box = fonts.cell_box();
         let mut images = Vec::new();
         let mut image_buffer = tui_surface.image_frame.buffer_mut();
         for ImageCell {
             image_id,
             view_rect,
-            z,
+            view_clip,
+            below_text,
             tr,
         } in image_buffer.images.iter()
         {
@@ -999,7 +992,8 @@ fn draw_tui(
                 image_id: *image_id,
                 img_size: (img.width, img.height),
                 view_rect: *view_rect,
-                z: *z,
+                view_clip: *view_clip,
+                below_text: *below_text,
                 uv_transform: *tr,
             };
 
@@ -1012,25 +1006,30 @@ fn draw_tui(
                 .position(|test| test.image_id == *image_id && test.view_rect == *view_rect)
             {
                 let test = tui_surface.images[pos];
-                if test.z != img_info.z || test.uv_transform != img_info.uv_transform {
+
+                if test.below_text != img_info.below_text
+                    || test.uv_transform != img_info.uv_transform
+                {
                     // existing image differs in render parameters.
                     tui_surface.dirty_img.push(img_info);
                 } else {
                     // any of the rows is marked as dirty
-                    let view_y =
-                        ((img_info.view_rect.1 / cell_box.height) as u16).min(bounds.height);
-                    let mut view_height = (img_info.view_rect.3 / cell_box.height) as u16;
-                    if img_info.view_rect.3 % cell_box.width != 0 {
-                        view_height += 1;
-                    }
-                    if view_y + view_height > bounds.height {
-                        view_height = bounds.height - view_y;
-                    }
-                    for y in view_y..view_y + view_height {
-                        if tui_surface.dirty_rows[y as usize] {
-                            tui_surface.dirty_img.push(img_info);
-                        }
-                    }
+                    // let view_y =
+                    //     ((img_info.view_rect.1 / cell_box.height) as u16).min(bounds.height);
+                    //
+                    // let mut view_height = (img_info.view_rect.3 / cell_box.height) as u16;
+                    // if img_info.view_rect.3 % cell_box.width != 0 {
+                    //     view_height += 1;
+                    // }
+                    // if view_y + view_height > bounds.height {
+                    //     view_height = bounds.height - view_y;
+                    // }
+                    // for y in view_y..view_y + view_height {
+                    //     if tui_surface.dirty_rows[y as usize] {
+                    //         tui_surface.dirty_img.push(img_info);
+                    //     }
+                    // }
+                    tui_surface.dirty_img.push(img_info);
                 }
                 tui_surface.images.remove(pos);
             } else {
@@ -1043,34 +1042,42 @@ fn draw_tui(
         image_buffer.images.clear();
 
         // overlapping cells of removed or dirty images must be marked as dirty.
-        for img_info in tui_surface
+        for _img_info in tui_surface
             .images
             .iter()
             .chain(tui_surface.dirty_img.iter())
         {
-            let mut view_width = (img_info.view_rect.2 / cell_box.width) as u16;
-            if img_info.view_rect.2 % cell_box.width != 0 {
-                view_width += 1;
-            }
-            let mut view_height = (img_info.view_rect.3 / cell_box.height) as u16;
-            if img_info.view_rect.3 % cell_box.width != 0 {
-                view_height += 1;
-            }
-            let area = ratatui_core::layout::Rect::new(
-                (img_info.view_rect.0 / cell_box.width) as u16,
-                (img_info.view_rect.1 / cell_box.height) as u16,
-                view_width,
-                view_height,
-            );
-            let area = area.intersection(ratatui_core::layout::Rect::new(
-                0,
-                0,
-                bounds.width,
-                bounds.height,
-            ));
-
-            for y in area.y..area.y + area.height {
-                for x in area.x..area.x + area.width {
+            // let mut view_width = (img_info.view_rect.2 / cell_box.width) as u16;
+            // if img_info.view_rect.2 % cell_box.width != 0 {
+            //     view_width += 1;
+            // }
+            // let mut view_height = (img_info.view_rect.3 / cell_box.height) as u16;
+            // if img_info.view_rect.3 % cell_box.width != 0 {
+            //     view_height += 1;
+            // }
+            // let area = ratatui_core::layout::Rect::new(
+            //     (img_info.view_rect.0 / cell_box.width) as u16,
+            //     (img_info.view_rect.1 / cell_box.height) as u16,
+            //     view_width,
+            //     view_height,
+            // );
+            // let area = area.intersection(ratatui_core::layout::Rect::new(
+            //     0,
+            //     0,
+            //     bounds.width,
+            //     bounds.height,
+            // ));
+            //
+            // for y in area.y..area.y + area.height {
+            //     for x in area.x..area.x + area.width {
+            //         tui_surface
+            //             .dirty_cells
+            //             .set((y * bounds.width + x) as usize, true);
+            //     }
+            //     tui_surface.dirty_rows.set(y as usize, true);
+            // }
+            for y in 0..bounds.height {
+                for x in 0..bounds.width {
                     tui_surface
                         .dirty_cells
                         .set((y * bounds.width + x) as usize, true);

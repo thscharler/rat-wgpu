@@ -206,11 +206,15 @@ fn build_blitter(
 }
 
 impl PostProcessor for DefaultPostProcessor {
-    fn map_to_cell(&self, scr_x: u32, scr_y: u32, font_box: CellBox) -> (u16, u16) {
-        (
-            (scr_x / font_box.width) as u16,
-            (scr_y / font_box.height) as u16,
-        )
+    fn map_to_cell(&self, scr_x: i32, scr_y: i32, font_box: CellBox) -> (u16, u16) {
+        if scr_x < 0 || scr_y < 0 {
+            (0, 0)
+        } else {
+            (
+                (scr_x as u32 / font_box.width) as u16,
+                (scr_y as u32 / font_box.height) as u16,
+            )
+        }
     }
 
     fn resize(

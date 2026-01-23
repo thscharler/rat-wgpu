@@ -612,38 +612,13 @@ pub(super) fn build_wgpu_state(
     text_dest_view
 }
 
-pub(super) fn build_img_size_bindings(
-    img_pipeline: &ImgPipeline,
-    device: &Device,
-    img_size: &Buffer,
-    view_size: &Buffer,
-    uv_transform: &Buffer,
-) -> BindGroup {
-    device.create_bind_group(&BindGroupDescriptor {
-        label: Some("Img Size Binding"),
-        layout: &img_pipeline.image_shader_layout,
-        entries: &[
-            BindGroupEntry {
-                binding: 0,
-                resource: img_size.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 1,
-                resource: view_size.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 2,
-                resource: uv_transform.as_entire_binding(),
-            },
-        ],
-    })
-}
-
 pub(super) fn build_img_bindings(
     img_pipeline: &ImgPipeline,
     device: &Device,
     sampler: &Sampler,
     img_texture: &TextureView,
+    uv_transform: &Buffer,
+    uv_clip: &Buffer,
 ) -> BindGroup {
     device.create_bind_group(&BindGroupDescriptor {
         label: Some("Img Compositor Fragment Binding"),
@@ -656,6 +631,14 @@ pub(super) fn build_img_bindings(
             BindGroupEntry {
                 binding: 1,
                 resource: BindingResource::TextureView(img_texture),
+            },
+            BindGroupEntry {
+                binding: 2,
+                resource: uv_transform.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 3,
+                resource: uv_clip.as_entire_binding(),
             },
         ],
     })
@@ -676,44 +659,6 @@ fn build_img_compositor(device: &Device, screen_size: &Buffer) -> ImgPipeline {
             },
             count: None,
         }],
-    });
-
-    let image_shader_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-        label: Some("Image Size Uniforms Binding Layout"),
-        entries: &[
-            BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::VERTEX,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(NonZeroU64::new(size_of::<[f32; 2]>() as u64).unwrap()),
-                },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 1,
-                visibility: ShaderStages::VERTEX,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(NonZeroU64::new(size_of::<[f32; 2]>() as u64).unwrap()),
-                },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 2,
-                visibility: ShaderStages::VERTEX,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(
-                        NonZeroU64::new(size_of::<[[f32; 4]; 2]>() as u64).unwrap(),
-                    ),
-                },
-                count: None,
-            },
-        ],
     });
 
     let fs_uniforms = device.create_bind_group(&BindGroupDescriptor {
@@ -744,16 +689,34 @@ fn build_img_compositor(device: &Device, screen_size: &Buffer) -> ImgPipeline {
                 },
                 count: None,
             },
+            BindGroupLayoutEntry {
+                binding: 2,
+                visibility: ShaderStages::FRAGMENT,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: Some(
+                        NonZeroU64::new(size_of::<[[f32; 4]; 2]>() as u64).unwrap(),
+                    ),
+                },
+                count: None,
+            },
+            BindGroupLayoutEntry {
+                binding: 3,
+                visibility: ShaderStages::FRAGMENT,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: Some(NonZeroU64::new(size_of::<[f32; 4]>() as u64).unwrap()),
+                },
+                count: None,
+            },
         ],
     });
 
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("Img Compositor Layout"),
-        bind_group_layouts: &[
-            &vertex_shader_layout,
-            &image_shader_layout,
-            &fragment_shader_layout,
-        ],
+        bind_group_layouts: &[&vertex_shader_layout, &fragment_shader_layout],
         immediate_size: 0,
     });
 
@@ -791,7 +754,6 @@ fn build_img_compositor(device: &Device, screen_size: &Buffer) -> ImgPipeline {
     });
 
     ImgPipeline {
-        image_shader_layout,
         fragment_shader_layout,
         pipeline,
         fs_uniforms,

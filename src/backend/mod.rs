@@ -1,7 +1,7 @@
 use crate::backend::surface::RenderSurface;
 use crate::colors::{ColorTable, Rgb};
 use crate::cursor::CursorStyle;
-use crate::image::{ImageFrame, ImageZ};
+use crate::image::ImageFrame;
 use crate::text_atlas::{Atlas, CacheRect};
 use bitvec::vec::BitVec;
 use raqote::Transform;
@@ -46,10 +46,10 @@ struct RenderInfo {
 #[derive(Debug, Clone, Copy)]
 struct ImageInfo {
     image_id: usize,
-    view_rect: (u32, u32, u32, u32),
-
+    view_rect: (i32, i32, u32, u32),
+    view_clip: (i32, i32, u32, u32),
     img_size: (u32, u32),
-    z: ImageZ,
+    below_text: bool,
     uv_transform: Transform,
 }
 
@@ -153,7 +153,6 @@ struct ImgPipeline {
     pipeline: RenderPipeline,
     fs_uniforms: BindGroup,
     fragment_shader_layout: BindGroupLayout,
-    image_shader_layout: BindGroupLayout,
 }
 
 struct TextCacheBgPipeline {
