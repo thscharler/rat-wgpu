@@ -1188,11 +1188,13 @@ fn flush_tui(
 
         let mut current_font_id = tui_surface.cell_font[row_offset];
         let mut current_level = Level::ltr();
+        let mut run_cell_idx = 0;
         for (level, range) in runs.into_iter().map(|run| (levels[run.start], run)) {
             let bidi_run_chars = &tmp_rowbuf[range.clone()];
             let bidi_run_cells = &tmp_rowbuf_to_cell[range.clone()];
             let min_cell_idx = *bidi_run_cells.first().expect("first") as usize;
             let max_cell_idx = *bidi_run_cells.last().expect("last") as usize;
+            let start_cell_idx = run_cell_idx;
 
             for (ch_idx, ch) in bidi_run_chars.char_indices() {
                 let cell_idx = bidi_run_cells[ch_idx] as usize;
@@ -1232,7 +1234,9 @@ fn flush_tui(
 
                 if level.is_rtl() {
                     // rtl flip visible cell index for this run.
-                    let view_idx = (max_cell_idx - (cell_idx - min_cell_idx)) as u16;
+                    let len_rtl = (max_cell_idx - min_cell_idx) as u16;
+                    let in_rtl = run_cell_idx - start_cell_idx;
+                    let view_idx = start_cell_idx + len_rtl - in_rtl;
 
                     if (cell_idx as u16, row_idx as u16) == tui_surface.cursor {
                         tui_surface.cursor_style = tui_surface.cursor_style.to_rtl();
@@ -1243,12 +1247,14 @@ fn flush_tui(
                     if (cell_idx as u16, row_idx as u16) == tui_surface.cursor {
                         tui_surface.cursor_style = tui_surface.cursor_style.to_ltr();
                     }
+                    tui_surface.cell_remap[row_offset + cell_idx] = run_cell_idx;
                 }
 
                 tmp_buffer.add(ch, (range.start + ch_idx) as u32);
 
                 current_font_id = font_id;
                 current_level = level;
+                run_cell_idx += 1;
             }
         }
 
