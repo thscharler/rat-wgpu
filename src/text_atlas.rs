@@ -99,15 +99,19 @@ impl Atlas {
     }
 
     pub(crate) fn get(&mut self, key: &Key, width: u32, height: u32) -> Entry {
-        debug_assert_eq!(
-            self.entry_height, height,
-            "Internal height not equal to provided height. Did you forget to call match_fonts?"
-        );
-        debug_assert_eq!(
-            self.entry_width % width,
-            0,
-            "Internal width not a multiple of provided width. Did you forget to call match_fonts?"
-        );
+        #[cfg(debug_assertions)]
+        if self.entry_height != height {
+            panic!(
+                "Internal height not equal to provided height. Did you forget to call match_fonts?"
+            );
+        }
+        #[cfg(debug_assertions)]
+        if self.entry_width % width != 0 {
+            panic!(
+                "{:?} width = {}: Internal width not a multiple of provided width. Did you forget to call match_fonts?",
+                key, width
+            );
+        }
 
         self.try_get(key).unwrap_or_else(|| {
             let rect = if self.next_entry == self.max_entries {
