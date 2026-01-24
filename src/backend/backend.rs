@@ -1235,8 +1235,15 @@ fn flush_tui(
                 if current_cell_idx == -1 {
                     current_cell_idx += 1;
                 } else if current_cell_idx != cell_idx as i32 {
-                    let symbol_width = row_cells[current_cell_idx as usize].symbol().width().max(1);
-                    current_cell_idx += symbol_width as i32;
+                    let symbol_width = row_cells[current_cell_idx as usize]
+                        .symbol()
+                        .chars()
+                        .filter(|c| c.general_category() != GeneralCategory::Format)
+                        .next()
+                        .unwrap_or(' ')
+                        .width()
+                        .unwrap_or(1);
+                    current_cell_idx = (current_cell_idx + symbol_width as i32);
                 }
 
                 if start_cell_idx.is_none() {
@@ -1381,25 +1388,31 @@ fn shape(
             }
         }
 
-        last_cell_idx = Some(cell_idx);
+        let basey = row_idx as i32 * cell_box.height as i32
+            + (position.y_offset as f32 * advance_scale) as i32;
 
         let glyph_advance = (position.x_advance as f32 * advance_scale) as i32;
         let glyph_offset = (position.x_offset as f32 * advance_scale) as i32;
 
-        let basey = row_idx as i32 * cell_box.height as i32
-            + (position.y_offset as f32 * advance_scale) as i32;
-
-        let mut basex = x + glyph_offset;
-        // special case: combining glyphs with offset == 0 && advance == 0
-        if glyph_advance == 0 && glyph_offset == 0 {
-            basex -= last_advance;
-        }
-        if glyph_advance > 0 {
+        // combining glyph
+        let basex;
+        if last_cell_idx == Some(cell_idx) {
+            if glyph_offset < 0 {
+                basex = x + glyph_offset;
+                last_advance += glyph_advance;
+                x += glyph_advance;
+            } else {
+                basex = x + glyph_offset - last_advance;
+                last_advance += glyph_advance;
+                x += glyph_advance;
+            }
+        } else {
+            basex = x + glyph_offset;
             last_advance = glyph_advance;
+            x += glyph_advance;
         }
 
-        // advance
-        x += glyph_advance;
+        last_cell_idx = Some(cell_idx);
 
         let key = Key {
             style: cell
