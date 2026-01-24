@@ -1284,6 +1284,225 @@ fn flush_tui(
     }
 }
 
+// shape a part of one row.
+//
+// the glyphs come as a GlyphBuffer provided by the bidi algorithm.
+// each glyph is mapped to a cell, which in turn might be mapped to a
+// visible cell if there is any reordering during bidi.
+//
+// then the glyph is positioned and rendered if it is not already in the
+// glyph-cache.
+//
+// Positioning of glyphs always restarts with each new cell.
+// This ensures that the output is mostly cell-aligned and makes
+// the final result more predictable.
+fn shape(
+    row_idx: usize,
+    row: &[Cell],
+    dirty_cells: &BitSlice,
+    cell_remap: &[u16],
+    buf_str: &str,
+    buf_to_cell: &[u16],
+    buffer: GlyphBuffer,
+    font_id: u64,
+    cell_box: CellBox,
+    font: &Font<'_>,
+    cursor_visible: bool,
+    cursor: (u16, u16),
+    rendered: &mut [Rendered],
+    wgpu_atlas: &mut WgpuAtlas,
+    queue: &Queue,
+) -> UnicodeBuffer {
+    let metrics = font.face();
+    let advance_scale = cell_box.scale;
+
+    let mut x = 0;
+    let mut default_chars_wide = 1;
+    #[allow(unused_assignments)]
+    let mut chars_wide = 1;
+    let mut last_cell_idx: Option<usize> = None;
+    let mut last_advance = 0;
+    for (info, position) in buffer
+        .glyph_infos()
+        .iter()
+        .zip(buffer.glyph_positions().iter())
+    {
+        let cell_idx = buf_to_cell[info.cluster as usize] as usize;
+
+        if !dirty_cells[cell_idx] {
+            continue;
+        }
+
+        let cell = &row[cell_idx];
+        let ch = buf_str[info.cluster as usize..]
+            .chars()
+            .next()
+            .unwrap_or_default();
+
+        // Every cell has it's defined position on the grid.
+        // This position is used as a starting point from which
+        // every glyph in the cell is positioned.
+        let mut first_glyph = false;
+        if last_cell_idx != Some(cell_idx) {
+            x = cell_remap[cell_idx] as i32 * cell_box.width as i32;
+            default_chars_wide = ch.width().unwrap_or(1).max(1);
+            chars_wide = default_chars_wide;
+            assert_ne!(chars_wide, 0);
+            last_advance = 0;
+            first_glyph = true;
+        } else {
+            chars_wide = ch.width().unwrap_or(default_chars_wide).max(1);
+            assert_ne!(chars_wide, 0);
+        }
+
+        // if we have a combining '.undef'. skip it completely.
+        if last_cell_idx == Some(cell_idx) {
+            if ch.general_category_group() == GeneralCategoryGroup::Mark && info.glyph_id == 0 {
+                continue;
+            }
+        }
+
+        last_cell_idx = Some(cell_idx);
+
+        let glyph_advance = (position.x_advance as f32 * advance_scale) as i32;
+        let glyph_offset = (position.x_offset as f32 * advance_scale) as i32;
+
+        let basey = row_idx as i32 * cell_box.height as i32
+            + (position.y_offset as f32 * advance_scale) as i32;
+
+        let mut basex = x + glyph_offset;
+        // special case: combining glyphs with offset == 0 && advance == 0
+        if glyph_advance == 0 && glyph_offset == 0 {
+            basex -= last_advance;
+        }
+        if glyph_advance > 0 {
+            last_advance = glyph_advance;
+        }
+
+        // advance
+        x += glyph_advance;
+
+        let key = Key {
+            style: cell
+                .modifier
+                .intersection(Modifier::BOLD | Modifier::ITALIC),
+            glyph: info.glyph_id,
+            width: chars_wide as u8,
+            font: font_id,
+        };
+
+        let cached =
+            wgpu_atlas
+                .cached
+                .get(&key, chars_wide as u32 * cell_box.width, cell_box.height);
+
+        let cursor_pos =
+            if first_glyph && cursor_visible && (cell_idx as u16, row_idx as u16) == cursor {
+                font.underline_metrics(cell_box.height, cached.height)
+            } else {
+                (0, 0)
+            };
+
+        let underline_pos = if cell.modifier.contains(Modifier::UNDERLINED) {
+            font.underline_metrics(cell_box.height, cached.height)
+        } else {
+            (0, 0)
+        };
+        let strikeout_pos = if cell.modifier.contains(Modifier::CROSSED_OUT) {
+            font.strikeout_metrics(cell_box.height, cached.height)
+        } else {
+            (0, 0)
+        };
+
+        if cached.cached() {
+            rendered[cell_idx].push((
+                basex,
+                basey,
+                GlyphId(info.glyph_id as _),
+                RenderInfo {
+                    cached: *cached,
+                    fg: cell.fg,
+                    bg: cell.bg,
+                    modifier: cell.modifier,
+                    underline_pos_min: underline_pos.0 as u16,
+                    underline_pos_max: underline_pos.1 as u16,
+                    strikeout_pos_min: strikeout_pos.0 as u16,
+                    strikeout_pos_max: strikeout_pos.1 as u16,
+                    cursor_pos_min: cursor_pos.0 as u16,
+                    cursor_pos_max: cursor_pos.1 as u16,
+                },
+            ));
+
+            continue;
+        }
+
+        let is_emoji =
+            ch.is_emoji_char() && ch.general_category_group() != GeneralCategoryGroup::Number;
+        let block_char = (ch as u32) >= 0x2500 && (ch as u32) <= 0x259F;
+
+        let (cached, image) = rasterize_glyph(
+            cached,
+            metrics,
+            info,
+            cell.modifier.contains(Modifier::BOLD),
+            cell.modifier.contains(Modifier::ITALIC),
+            advance_scale,
+            cell_box.ascender,
+            is_emoji,
+            block_char,
+            ch.general_category(),
+            font.is_fallback(),
+        );
+
+        // remember colored flag for the glyph.
+        wgpu_atlas.cached.update_colored(&key, cached.color);
+
+        rendered[cell_idx].push((
+            basex,
+            basey,
+            GlyphId(info.glyph_id as _),
+            RenderInfo {
+                cached,
+                fg: cell.fg,
+                bg: cell.bg,
+                modifier: cell.modifier,
+                underline_pos_min: underline_pos.0 as u16,
+                underline_pos_max: underline_pos.1 as u16,
+                strikeout_pos_min: strikeout_pos.0 as u16,
+                strikeout_pos_max: strikeout_pos.1 as u16,
+                cursor_pos_min: cursor_pos.0 as u16,
+                cursor_pos_max: cursor_pos.1 as u16,
+            },
+        ));
+
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &wgpu_atlas.text_cache,
+                mip_level: 0,
+                origin: Origin3d {
+                    x: cached.x,
+                    y: cached.y,
+                    z: 0,
+                },
+                aspect: TextureAspect::All,
+            },
+            bytemuck::cast_slice(&image),
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(cached.width * size_of::<u32>() as u32),
+                rows_per_image: Some(cached.height),
+            },
+            Extent3d {
+                width: cached.width,
+                height: cached.height,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+
+    buffer.clear()
+}
+
 fn flush_blink(
     blinking: Blinking,
     bounds: ratatui_core::layout::Size,
@@ -1597,223 +1816,4 @@ fn append_rendered(
             cursor_color: cursor_color_u32,
         });
     }
-}
-
-// shape a part of one row.
-//
-// the glyphs come as a GlyphBuffer provided by the bidi algorithm.
-// each glyph is mapped to a cell, which in turn might be mapped to a
-// visible cell if there is any reordering during bidi.
-//
-// then the glyph is positioned and rendered if it is not already in the
-// glyph-cache.
-//
-// Positioning of glyphs always restarts with each new cell.
-// This ensures that the output is mostly cell-aligned and makes
-// the final result more predictable.
-fn shape(
-    row_idx: usize,
-    row: &[Cell],
-    dirty_cells: &BitSlice,
-    cell_remap: &[u16],
-    buf_str: &str,
-    buf_to_cell: &[u16],
-    buffer: GlyphBuffer,
-    font_id: u64,
-    cell_box: CellBox,
-    font: &Font<'_>,
-    cursor_visible: bool,
-    cursor: (u16, u16),
-    rendered: &mut [Rendered],
-    wgpu_atlas: &mut WgpuAtlas,
-    queue: &Queue,
-) -> UnicodeBuffer {
-    let metrics = font.face();
-    let advance_scale = cell_box.scale;
-
-    let mut x = 0;
-    let mut default_chars_wide = 1;
-    #[allow(unused_assignments)]
-    let mut chars_wide = 1;
-    let mut last_cell_idx: Option<usize> = None;
-    let mut last_advance = 0;
-    for (info, position) in buffer
-        .glyph_infos()
-        .iter()
-        .zip(buffer.glyph_positions().iter())
-    {
-        let cell_idx = buf_to_cell[info.cluster as usize] as usize;
-
-        if !dirty_cells[cell_idx] {
-            continue;
-        }
-
-        let cell = &row[cell_idx];
-        let ch = buf_str[info.cluster as usize..]
-            .chars()
-            .next()
-            .unwrap_or_default();
-
-        // Every cell has it's defined position on the grid.
-        // This position is used as a starting point from which
-        // every glyph in the cell is positioned.
-        let mut first_glyph = false;
-        if last_cell_idx != Some(cell_idx) {
-            x = cell_remap[cell_idx] as i32 * cell_box.width as i32;
-            default_chars_wide = ch.width().unwrap_or(1).max(1);
-            assert_ne!(default_chars_wide, 0);
-            chars_wide = default_chars_wide;
-            last_advance = 0;
-            first_glyph = true;
-        } else {
-            chars_wide = ch.width().unwrap_or(default_chars_wide).max(1);
-            assert_ne!(chars_wide, 0);
-        }
-
-        // if we have a combining '.undef'. skip it completely.
-        if last_cell_idx == Some(cell_idx) {
-            if ch.general_category_group() == GeneralCategoryGroup::Mark && info.glyph_id == 0 {
-                continue;
-            }
-        }
-
-        last_cell_idx = Some(cell_idx);
-
-        let glyph_advance = (position.x_advance as f32 * advance_scale) as i32;
-        let glyph_offset = (position.x_offset as f32 * advance_scale) as i32;
-
-        let basey = row_idx as i32 * cell_box.height as i32
-            + (position.y_offset as f32 * advance_scale) as i32;
-
-        let mut basex = x + glyph_offset;
-        // special case: combining glyphs with offset == 0 && advance == 0
-        if glyph_advance == 0 && glyph_offset == 0 {
-            basex -= last_advance;
-        }
-        if glyph_advance > 0 {
-            last_advance = glyph_advance;
-        }
-
-        // advance
-        x += glyph_advance;
-
-        let key = Key {
-            style: cell
-                .modifier
-                .intersection(Modifier::BOLD | Modifier::ITALIC),
-            glyph: info.glyph_id,
-            width: chars_wide as u8,
-            font: font_id,
-        };
-
-        let cached =
-            wgpu_atlas
-                .cached
-                .get(&key, chars_wide as u32 * cell_box.width, cell_box.height);
-
-        let cursor_pos =
-            if first_glyph && cursor_visible && (cell_idx as u16, row_idx as u16) == cursor {
-                font.underline_metrics(cell_box.height, cached.height)
-            } else {
-                (0, 0)
-            };
-
-        let underline_pos = if cell.modifier.contains(Modifier::UNDERLINED) {
-            font.underline_metrics(cell_box.height, cached.height)
-        } else {
-            (0, 0)
-        };
-        let strikeout_pos = if cell.modifier.contains(Modifier::CROSSED_OUT) {
-            font.strikeout_metrics(cell_box.height, cached.height)
-        } else {
-            (0, 0)
-        };
-
-        if cached.cached() {
-            rendered[cell_idx].push((
-                basex,
-                basey,
-                GlyphId(info.glyph_id as _),
-                RenderInfo {
-                    cached: *cached,
-                    fg: cell.fg,
-                    bg: cell.bg,
-                    modifier: cell.modifier,
-                    underline_pos_min: underline_pos.0 as u16,
-                    underline_pos_max: underline_pos.1 as u16,
-                    strikeout_pos_min: strikeout_pos.0 as u16,
-                    strikeout_pos_max: strikeout_pos.1 as u16,
-                    cursor_pos_min: cursor_pos.0 as u16,
-                    cursor_pos_max: cursor_pos.1 as u16,
-                },
-            ));
-
-            continue;
-        }
-
-        let is_emoji =
-            ch.is_emoji_char() && ch.general_category_group() != GeneralCategoryGroup::Number;
-        let block_char = (ch as u32) >= 0x2500 && (ch as u32) <= 0x259F;
-
-        let (cached, image) = rasterize_glyph(
-            cached,
-            metrics,
-            info,
-            cell.modifier.contains(Modifier::BOLD),
-            cell.modifier.contains(Modifier::ITALIC),
-            advance_scale,
-            cell_box.ascender,
-            is_emoji,
-            block_char,
-            ch.general_category(),
-            font.is_fallback(),
-        );
-
-        // remember colored flag for the glyph.
-        wgpu_atlas.cached.update_colored(&key, cached.color);
-
-        rendered[cell_idx].push((
-            basex,
-            basey,
-            GlyphId(info.glyph_id as _),
-            RenderInfo {
-                cached,
-                fg: cell.fg,
-                bg: cell.bg,
-                modifier: cell.modifier,
-                underline_pos_min: underline_pos.0 as u16,
-                underline_pos_max: underline_pos.1 as u16,
-                strikeout_pos_min: strikeout_pos.0 as u16,
-                strikeout_pos_max: strikeout_pos.1 as u16,
-                cursor_pos_min: cursor_pos.0 as u16,
-                cursor_pos_max: cursor_pos.1 as u16,
-            },
-        ));
-
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &wgpu_atlas.text_cache,
-                mip_level: 0,
-                origin: Origin3d {
-                    x: cached.x,
-                    y: cached.y,
-                    z: 0,
-                },
-                aspect: TextureAspect::All,
-            },
-            bytemuck::cast_slice(&image),
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(cached.width * size_of::<u32>() as u32),
-                rows_per_image: Some(cached.height),
-            },
-            Extent3d {
-                width: cached.width,
-                height: cached.height,
-                depth_or_array_layers: 1,
-            },
-        );
-    }
-
-    buffer.clear()
 }
