@@ -2,7 +2,7 @@ use crate::backend::builder::{build_img_bindings, build_wgpu_state};
 use crate::backend::plan_cache::PlanCache;
 use crate::backend::surface::RenderSurface;
 use crate::backend::{
-    ImageInfo, ImgVertexMember, NULL_CELL, ONE_CELL, RenderInfo, Rendered, TextBgVertexMember,
+    ImageInfo, ImgVertexMember, NULL_CELL, RenderInfo, Rendered, TextBgVertexMember,
     TextVertexMember, TuiSurface, WgpuAtlas, WgpuBase, WgpuImage, WgpuImages, WgpuPipeline,
     WgpuVertices,
 };
@@ -30,7 +30,7 @@ use unicode_bidi::ParagraphBidiInfo;
 use unicode_properties::{
     GeneralCategory, GeneralCategoryGroup, UnicodeEmoji, UnicodeGeneralCategory,
 };
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthChar;
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
     Buffer, BufferUsages, BufferView, CommandEncoderDescriptor, Device, Extent3d, IndexFormat,
@@ -1394,46 +1394,22 @@ fn shape(
         let glyph_advance = (position.x_advance as f32 * advance_scale) as i32;
         let glyph_offset = (position.x_offset as f32 * advance_scale) as i32;
 
-        debug!(
-            "{} {} glyph {:?} off {} adv {} / {} / xoff {} xadv {} asc {} desc {} em {}",
-            row_idx,
-            cell_idx,
-            font.face().glyph_name(GlyphId(info.glyph_id as u16)),
-            glyph_offset,
-            glyph_advance,
-            font.is_fallback(),
-            position.x_offset,
-            position.x_advance,
-            font.ascender(),
-            font.descender(),
-            font.em_advance(),
-        );
-
         // combining glyph
         let basex;
         if last_cell_idx == Some(cell_idx) {
             if glyph_offset < 0 {
                 basex = x + glyph_offset;
-                debug!("  case2 basex {} <- {} + {}", basex, x, glyph_offset);
                 last_advance += glyph_advance;
                 x += glyph_advance;
-                debug!("    -> x {}", x);
             } else {
                 basex = x + glyph_offset - last_advance;
-                debug!(
-                    "  case1 basex {} <- {} + {} - {}",
-                    basex, x, glyph_offset, last_advance
-                );
                 last_advance += glyph_advance;
                 x += glyph_advance;
-                debug!("    -> x {}", x);
             }
         } else {
             basex = x + glyph_offset;
-            debug!("  case0 basex {}", basex);
             last_advance = glyph_advance;
             x += glyph_advance;
-            debug!("    -> x {}", x);
         }
 
         last_cell_idx = Some(cell_idx);
