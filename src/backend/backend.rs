@@ -970,6 +970,8 @@ fn draw_tui(
         .dirty_cells
         .resize(bounds.height as usize * bounds.width as usize, true);
 
+    let cell_box = fonts.cell_box();
+
     // image preparation
     {
         let mut images = Vec::new();
@@ -1009,23 +1011,19 @@ fn draw_tui(
                     // existing image differs in render parameters.
                     tui_surface.dirty_img.push(img_info);
                 } else {
-                    // any of the rows is marked as dirty
-                    // let view_y =
-                    //     ((img_info.view_rect.1 / cell_box.height) as u16).min(bounds.height);
-                    //
-                    // let mut view_height = (img_info.view_rect.3 / cell_box.height) as u16;
-                    // if img_info.view_rect.3 % cell_box.width != 0 {
-                    //     view_height += 1;
-                    // }
-                    // if view_y + view_height > bounds.height {
-                    //     view_height = bounds.height - view_y;
-                    // }
-                    // for y in view_y..view_y + view_height {
-                    //     if tui_surface.dirty_rows[y as usize] {
-                    //         tui_surface.dirty_img.push(img_info);
-                    //     }
-                    // }
-                    tui_surface.dirty_img.push(img_info);
+                    // any row the image covers is marked as dirty.
+                    let img_pos =
+                        cell_box.cell_pos(img_info.view_rect.0, img_info.view_rect.1, bounds);
+                    let img_pos2 = cell_box.cell_pos(
+                        img_info.view_rect.0 + img_info.view_rect.2 as i32,
+                        img_info.view_rect.1 + img_info.view_rect.3 as i32,
+                        bounds,
+                    );
+                    for y in img_pos.y..=img_pos2.y {
+                        if tui_surface.dirty_rows[y as usize] {
+                            tui_surface.dirty_img.push(img_info);
+                        }
+                    }
                 }
                 tui_surface.images.remove(pos);
             } else {
@@ -1038,42 +1036,21 @@ fn draw_tui(
         image_buffer.images.clear();
 
         // overlapping cells of removed or dirty images must be marked as dirty.
-        for _img_info in tui_surface
+        for img_info in tui_surface
             .images
             .iter()
             .chain(tui_surface.dirty_img.iter())
         {
-            // let mut view_width = (img_info.view_rect.2 / cell_box.width) as u16;
-            // if img_info.view_rect.2 % cell_box.width != 0 {
-            //     view_width += 1;
-            // }
-            // let mut view_height = (img_info.view_rect.3 / cell_box.height) as u16;
-            // if img_info.view_rect.3 % cell_box.width != 0 {
-            //     view_height += 1;
-            // }
-            // let area = ratatui_core::layout::Rect::new(
-            //     (img_info.view_rect.0 / cell_box.width) as u16,
-            //     (img_info.view_rect.1 / cell_box.height) as u16,
-            //     view_width,
-            //     view_height,
-            // );
-            // let area = area.intersection(ratatui_core::layout::Rect::new(
-            //     0,
-            //     0,
-            //     bounds.width,
-            //     bounds.height,
-            // ));
-            //
-            // for y in area.y..area.y + area.height {
-            //     for x in area.x..area.x + area.width {
-            //         tui_surface
-            //             .dirty_cells
-            //             .set((y * bounds.width + x) as usize, true);
-            //     }
-            //     tui_surface.dirty_rows.set(y as usize, true);
-            // }
-            for y in 0..bounds.height {
-                for x in 0..bounds.width {
+            // any row the image covers is marked as dirty.
+            let img_pos = cell_box.cell_pos(img_info.view_rect.0, img_info.view_rect.1, bounds);
+            let img_pos2 = cell_box.cell_pos(
+                img_info.view_rect.0 + img_info.view_rect.2 as i32,
+                img_info.view_rect.1 + img_info.view_rect.3 as i32,
+                bounds,
+            );
+
+            for y in img_pos.y..=img_pos2.y {
+                for x in img_pos.x..=img_pos2.x {
                     tui_surface
                         .dirty_cells
                         .set((y * bounds.width + x) as usize, true);
@@ -1100,17 +1077,37 @@ fn draw_tui(
             .slow_blinking
             .set(index, cell.modifier.contains(Modifier::SLOW_BLINK));
 
-        let old_symbol_width = tui_surface.cells[index].symbol().width();
-        if index + 1 < index + old_symbol_width {
-            tui_surface.cells[index + 1..index + old_symbol_width].fill(ONE_CELL);
-            tui_surface.dirty_cells[index + 1..index + old_symbol_width].fill(true);
+        // every other cell any of the glyphs has touched is dirty now.
+        for (rx, ry, _glyph_id, render_info) in &rendered[index] {
+            let glyph_pos = cell_box.cell_pos(*rx, *ry, bounds);
+            let glyph_pos2 = cell_box.cell_pos(
+                *rx + render_info.cached.width as i32,
+                *ry + render_info.cached.height as i32,
+                bounds,
+            );
+
+            for y in glyph_pos.y..=glyph_pos2.y {
+                for x in glyph_pos.x..=glyph_pos2.x {
+                    tui_surface
+                        .dirty_cells
+                        .set((y * bounds.width + x) as usize, true);
+                }
+                tui_surface.dirty_rows.set(y as usize, true);
+            }
         }
 
         tui_surface.cells[index] = cell.clone();
         tui_surface.cell_font[index] = fonts.font_for_cell(cell);
         tui_surface.dirty_cells.set(index, true);
 
-        let new_symbol_width = tui_surface.cells[index].symbol().width();
+        let new_symbol_width = tui_surface.cells[index]
+            .symbol()
+            .chars()
+            .filter(|c| c.general_category() != GeneralCategory::Format)
+            .next()
+            .unwrap_or(' ')
+            .width()
+            .unwrap_or(1);
         if index + 1 < index + new_symbol_width {
             tui_surface.cells[index + 1..index + new_symbol_width].fill(NULL_CELL);
             tui_surface.dirty_cells[index + 1..index + new_symbol_width].fill(true);
