@@ -30,16 +30,21 @@ pub struct CellBox {
 }
 
 impl CellBox {
-    /// Pixel to cell-size. Rounded up.
-    pub fn cell_size(&self, width: u32, height: u32) -> ratatui_core::layout::Size {
-        let w = width / self.width + if width % self.width == 0 { 0 } else { 1 };
-        let h = height / self.height + if height % self.height == 0 { 0 } else { 1 };
-
-        ratatui_core::layout::Size::new(w as u16, h as u16)
+    /// Pixel to cell-position. Rounded down.
+    /// Out-of-bounds are clamped to 0..width/height - 1.
+    pub(crate) fn cell_pos(
+        &self,
+        x: i32,
+        y: i32,
+        bounds: ratatui_core::layout::Size,
+    ) -> ratatui_core::layout::Position {
+        let cx = (x / self.width as i32).clamp(0, bounds.width.saturating_sub(1) as i32) as u16;
+        let cy = (y / self.height as i32).clamp(0, bounds.height.saturating_sub(1) as i32) as u16;
+        ratatui_core::layout::Position::new(cx, cy)
     }
 
     /// Cell-size to pixel.
-    pub fn px_size(&self, width: u16, height: u16) -> (u32, u32) {
+    pub(crate) fn px_size(&self, width: u16, height: u16) -> (u32, u32) {
         (width as u32 * self.width, height as u32 * self.height)
     }
 }
