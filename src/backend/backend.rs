@@ -26,7 +26,7 @@ use std::mem;
 use std::num::NonZeroU64;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use unicode_bidi::{Level, ParagraphBidiInfo};
+use unicode_bidi::ParagraphBidiInfo;
 use unicode_properties::{
     GeneralCategory, GeneralCategoryGroup, UnicodeEmoji, UnicodeGeneralCategory,
 };
@@ -1147,7 +1147,7 @@ fn flush_tui(
             continue;
         }
 
-        let row_offset = row_idx.min(bounds.height as usize - 1) * bounds.width as usize;
+        let row_offset = row_idx * bounds.width as usize;
 
         // This block concatenates the strings for the row into one string for bidi
         // resolution, then maps bytes for the string to their associated cell index. It
@@ -1186,26 +1186,29 @@ fn flush_tui(
             }
         }
 
-        let mut current_font_id = tui_surface.cell_font[row_offset];
-        let mut current_level = Level::ltr();
-        let mut run_cell_idx = 0;
+        let mut current_font_id = None;
+        let mut current_level = None;
+        let mut current_cell_idx = -1;
         for (level, range) in runs.into_iter().map(|run| (levels[run.start], run)) {
             let bidi_run_chars = &tmp_rowbuf[range.clone()];
             let bidi_run_cells = &tmp_rowbuf_to_cell[range.clone()];
             let min_cell_idx = *bidi_run_cells.first().expect("first") as usize;
             let max_cell_idx = *bidi_run_cells.last().expect("last") as usize;
-            let start_cell_idx = run_cell_idx;
+            let mut start_cell_idx = None;
 
             for (ch_idx, ch) in bidi_run_chars.char_indices() {
-                let cell_idx = bidi_run_cells[ch_idx] as usize;
-
                 if ch.general_category() == GeneralCategory::Format {
-                    // skip Format, no longer needed after bidi. probably?
+                    // skip Format, no longer needed after bidi.
                     continue;
                 }
 
+                let cell_idx = bidi_run_cells[ch_idx] as usize;
+
                 let font_id = tui_surface.cell_font[row_offset + cell_idx];
-                if font_id != current_font_id || current_level != level {
+                if let (Some(current_font_id), Some(current_level)) =
+                    (current_font_id, current_level)
+                    && (font_id != current_font_id || level != current_level)
+                {
                     let mut buffer = mem::take(tmp_buffer);
                     let current_font = fonts.get_by_id(current_font_id);
 
@@ -1232,55 +1235,68 @@ fn flush_tui(
                     );
                 }
 
+                if current_cell_idx == -1 {
+                    current_cell_idx += 1;
+                } else if current_cell_idx != cell_idx as i32 {
+                    let symbol_width = row_cells[current_cell_idx as usize].symbol().width().max(1);
+                    current_cell_idx += symbol_width as i32;
+                }
+
+                if start_cell_idx.is_none() {
+                    start_cell_idx = Some(current_cell_idx);
+                }
+
                 if level.is_rtl() {
                     // rtl flip visible cell index for this run.
-                    let len_rtl = (max_cell_idx - min_cell_idx) as u16;
-                    let in_rtl = run_cell_idx - start_cell_idx;
+                    let start_cell_idx = start_cell_idx.expect("start_cell_idx");
+                    let len_rtl = (max_cell_idx - min_cell_idx) as i32;
+                    let in_rtl = current_cell_idx - start_cell_idx;
                     let view_idx = start_cell_idx + len_rtl - in_rtl;
 
                     if (cell_idx as u16, row_idx as u16) == tui_surface.cursor {
                         tui_surface.cursor_style = tui_surface.cursor_style.to_rtl();
                     }
 
-                    tui_surface.cell_remap[row_offset + cell_idx] = view_idx;
+                    tui_surface.cell_remap[row_offset + cell_idx] = view_idx as u16;
                 } else {
                     if (cell_idx as u16, row_idx as u16) == tui_surface.cursor {
                         tui_surface.cursor_style = tui_surface.cursor_style.to_ltr();
                     }
-                    tui_surface.cell_remap[row_offset + cell_idx] = run_cell_idx;
+                    tui_surface.cell_remap[row_offset + cell_idx] = current_cell_idx as u16;
                 }
 
                 tmp_buffer.add(ch, (range.start + ch_idx) as u32);
 
-                current_font_id = font_id;
-                current_level = level;
-                run_cell_idx += 1;
+                current_font_id = Some(font_id);
+                current_level = Some(level);
             }
         }
 
-        let mut buffer = mem::take(tmp_buffer);
-        let current_font = fonts.get_by_id(current_font_id);
-        *tmp_buffer = shape(
-            row_idx,
-            row_cells,
-            &tui_surface.dirty_cells[row_offset..row_offset + bounds.width as usize],
-            &tui_surface.cell_remap[row_offset..row_offset + bounds.width as usize],
-            &tmp_rowbuf,
-            tmp_rowbuf_to_cell,
-            shape_with_plan(
-                current_font.face(),
-                tmp_plan_cache.get(current_font_id, current_font, &mut buffer),
-                buffer,
-            ),
-            current_font_id,
-            fonts.cell_box(),
-            current_font,
-            tui_surface.cursor_visible,
-            tui_surface.cursor,
-            &mut rendered[row_offset..row_offset + bounds.width as usize],
-            wgpu_atlas,
-            queue,
-        );
+        if let Some(current_font_id) = current_font_id {
+            let mut buffer = mem::take(tmp_buffer);
+            let current_font = fonts.get_by_id(current_font_id);
+            *tmp_buffer = shape(
+                row_idx,
+                row_cells,
+                &tui_surface.dirty_cells[row_offset..row_offset + bounds.width as usize],
+                &tui_surface.cell_remap[row_offset..row_offset + bounds.width as usize],
+                &tmp_rowbuf,
+                tmp_rowbuf_to_cell,
+                shape_with_plan(
+                    current_font.face(),
+                    tmp_plan_cache.get(current_font_id, current_font, &mut buffer),
+                    buffer,
+                ),
+                current_font_id,
+                fonts.cell_box(),
+                current_font,
+                tui_surface.cursor_visible,
+                tui_surface.cursor,
+                &mut rendered[row_offset..row_offset + bounds.width as usize],
+                wgpu_atlas,
+                queue,
+            );
+        }
     }
 }
 
