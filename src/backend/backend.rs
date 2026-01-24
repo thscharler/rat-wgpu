@@ -1345,13 +1345,19 @@ fn shape(
         let mut first_glyph = false;
         if last_cell_idx != Some(cell_idx) {
             x = cell_remap[cell_idx] as i32 * cell_box.width as i32;
-            default_chars_wide = ch.width().unwrap_or(1).max(1);
+            // zero width are still 1 cell wide.
+            // there is KHMER SIGN BEYYAL with width 3.
+            // we ignore that one completely.
+            default_chars_wide = ch.width().unwrap_or(1).max(1).min(2);
             chars_wide = default_chars_wide;
             assert_ne!(chars_wide, 0);
             last_advance = 0;
             first_glyph = true;
         } else {
-            chars_wide = ch.width().unwrap_or(default_chars_wide).max(1);
+            // zero width are still 1 cell wide.
+            // there is KHMER SIGN BEYYAL with width 3.
+            // we ignore that one completely.
+            chars_wide = ch.width().unwrap_or(default_chars_wide).max(1).min(2);
             assert_ne!(chars_wide, 0);
         }
 
