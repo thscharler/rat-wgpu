@@ -1439,28 +1439,18 @@ fn shape(
 
         let cursor_pos =
             if first_glyph && cursor_visible && (cell_idx as u16, row_idx as u16) == cursor {
-                font.underline_metrics(
-                    info.glyph_id as u16,
-                    cell_box.ascender,
-                    chars_wide as u32,
-                    cached.height,
-                )
+                font.underline_metrics(cell_box.ascender, cached.height)
             } else {
                 (0, 0)
             };
 
         let underline_pos = if view_modifier.contains(Modifier::UNDERLINED) {
-            font.underline_metrics(
-                info.glyph_id as u16,
-                cell_box.ascender,
-                chars_wide as u32,
-                cached.height,
-            )
+            font.underline_metrics(cell_box.ascender, cached.height)
         } else {
             (0, 0)
         };
         let strikeout_pos = if view_modifier.contains(Modifier::CROSSED_OUT) {
-            font.strikeout_metrics(info.glyph_id as u16, chars_wide as u32, cell_box.ascender)
+            font.strikeout_metrics(cell_box.ascender)
         } else {
             (0, 0)
         };

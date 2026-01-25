@@ -1,3 +1,4 @@
+use log::debug;
 use rustybuzz::Face;
 use rustybuzz::ttf_parser::GlyphId;
 
@@ -139,20 +140,18 @@ impl<'a> Font<'a> {
         }
     }
 
-    pub(crate) fn underline_metrics(
-        &self,
-        glyph_id: u16,
-        ascender: u32,
-        char_width: u32,
-        box_height_px: u32,
-    ) -> (u32, u32) {
-        let scale = self.scale_x(glyph_id, false, char_width);
-
+    pub(crate) fn underline_metrics(&self, ascender: u32, box_height_px: u32) -> (u32, u32) {
+        let font_ascender = self.font.ascender() as f32;
         let underline_position = self
             .font
             .underline_metrics()
             .map(|m| m.position as f32)
             .unwrap_or(0.0);
+        let mut underline_percent = underline_position / font_ascender;
+        // hack 9902
+        if underline_percent > 0.0 {
+            underline_percent = -0.05;
+        }
 
         let underline_thickness = self
             .font
@@ -161,9 +160,10 @@ impl<'a> Font<'a> {
             .unwrap_or(100.0); /* observed average */
         // default underlines are a bit thin for larger font-sizes.
         let underline_thickness = underline_thickness * 1.3;
+        let underline_thickness_percent = underline_thickness / font_ascender;
 
-        let underline_position = ascender - (underline_position * scale) as u32;
-        let underline_thickness = ((underline_thickness * scale) as u32).max(1);
+        let underline_position = ascender - (ascender as f32 * underline_percent) as u32;
+        let underline_thickness = ((ascender as f32 * underline_thickness_percent) as u32).max(1);
 
         // might overflow the box
         if underline_position + underline_thickness < box_height_px {
@@ -176,13 +176,8 @@ impl<'a> Font<'a> {
         }
     }
 
-    pub(crate) fn strikeout_metrics(
-        &self,
-        glyph_id: u16,
-        ascender: u32,
-        char_width: u32,
-    ) -> (u32, u32) {
-        let scale = self.scale_x(glyph_id, false, char_width);
+    pub(crate) fn strikeout_metrics(&self, ascender: u32) -> (u32, u32) {
+        let font_ascender = self.font.ascender() as f32;
 
         let strikeout_position = self
             .font
@@ -192,8 +187,9 @@ impl<'a> Font<'a> {
         let strikeout_position = if strikeout_position > 0.0 {
             strikeout_position
         } else {
-            self.font.ascender() as f32 * 0.3 /* observed average */
+            font_ascender * 0.3 /* observed average */
         };
+        let strikeout_percent = strikeout_position / font_ascender;
 
         let strikeout_thickness = self
             .font
@@ -202,10 +198,11 @@ impl<'a> Font<'a> {
             .unwrap_or(100.0); /* observed average */
         // default strikeout lines are a bit thin for larger font-sizes.
         let strikeout_thickness = strikeout_thickness * 1.8;
+        let strikeout_thickness_percent = strikeout_thickness / font_ascender;
 
-        (
-            ascender - (strikeout_position * scale) as u32,
-            ascender - ((strikeout_position + strikeout_thickness) * scale) as u32,
-        )
+        let strikeout_position = ascender - (ascender as f32 * strikeout_percent) as u32;
+        let strikeout_thickness = ((ascender as f32 * strikeout_thickness_percent) as u32).max(1);
+
+        (strikeout_position, strikeout_position + strikeout_thickness)
     }
 }
