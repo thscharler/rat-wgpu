@@ -80,14 +80,16 @@ where
     }
 }
 
+impl<'a> Builder<'a, DefaultPostProcessorBuilder> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 impl<'a, P> Builder<'a, P>
 where
     P: PostProcessorBuilder + Default,
 {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn new_with_postprocessor(builder: P) -> Self {
         Self {
             postprocessor: builder,
