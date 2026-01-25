@@ -8,6 +8,8 @@ pub mod image;
 pub mod postprocessor;
 mod text_atlas;
 pub(crate) mod util;
+#[cfg(feature = "winit-event")]
+pub mod events;
 
 pub use backend::backend::WgpuBackend;
 pub use backend::builder::Builder;
