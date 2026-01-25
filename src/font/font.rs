@@ -1,4 +1,3 @@
-use log::debug;
 use rustybuzz::Face;
 use rustybuzz::ttf_parser::GlyphId;
 

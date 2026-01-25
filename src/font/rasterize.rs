@@ -16,7 +16,7 @@ pub(crate) fn rasterize_glyph(
     italic: bool,
     advance_scale: f32,
     advance_scale_y: f32,
-    ascender: u32,
+    mut ascender: u32,
     emoji: bool,
     block_char: bool,
     category: GeneralCategory,
@@ -35,6 +35,7 @@ pub(crate) fn rasterize_glyph(
         computed_offset_x = 0.0;
         computed_offset_y = 0.0;
 
+        ascender = (face.ascender() as f32 * advance_scale_y) as u32;
         scale = advance_scale * 2.0;
         scale_y = advance_scale_y * 2.0;
     } else if is_fallback {
