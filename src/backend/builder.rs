@@ -148,7 +148,7 @@ where
     pub fn with_font_size_px(mut self, size: u32) -> Self {
         if size > 0 {
             self.init_fallback_fonts();
-            self.fonts.as_mut().expect("fonts").set_size_px(size);
+            self.fonts.as_mut().expect("fonts").set_height_px(size);
         }
         self
     }
@@ -408,7 +408,7 @@ where
         let fonts = self.fonts.as_ref().expect("fonts");
 
         // this may create a surface that is bigger than the window.
-        let width = self.width.max(fonts.min_width_px());
+        let width = self.width.max(fonts.width_px());
         let height = self.height.max(fonts.height_px());
 
         let mut surface_config = surface
@@ -426,7 +426,7 @@ where
 
         info!(
             "char width x height: {}x{}",
-            fonts.min_width_px(),
+            fonts.width_px(),
             fonts.height_px()
         );
 
@@ -487,7 +487,7 @@ where
 
         let wgpu_view = build_wgpu_state(
             &device,
-            (drawable_width / fonts.min_width_px()) * fonts.min_width_px(),
+            (drawable_width / fonts.width_px()) * fonts.width_px(),
             (drawable_height / fonts.height_px()) * fonts.height_px(),
         );
 

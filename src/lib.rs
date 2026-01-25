@@ -25,8 +25,6 @@ pub struct CellBox {
     pub height: u32,
     /// Baseline for glyphs. Measured from the top of the box.
     pub ascender: f32,
-    /// Scaling factor from font-coords to px for the primary font.
-    pub scale: f32,
 }
 
 impl CellBox {

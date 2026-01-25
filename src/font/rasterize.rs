@@ -36,6 +36,8 @@ pub(crate) fn rasterize_glyph(
     let scale;
     let scale_y;
     if is_fallback && block_char {
+        // block-chars must always scale according to the originating font.
+        // otherwise this leaves gaps.
         let rect_scale_y = cached.height as f32 / (metrics.height() as f32);
 
         ascender = (metrics.ascender() as f32) * (rect_scale_y / advance_scale);

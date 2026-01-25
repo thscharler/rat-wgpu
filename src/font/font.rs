@@ -3,10 +3,12 @@ use rustybuzz::Face;
 /// A Font which can be used for rendering.
 #[derive(Clone)]
 pub struct Font<'a> {
-    pub(crate) font: Face<'a>,
-    pub(crate) fallback: bool,
-    pub(crate) advance: f32,
-    pub(crate) id: u64,
+    font: Face<'a>,
+    fallback: bool,
+    advance: f32,
+    height_px: u32,
+    width_px: u32,
+    id: u64,
 }
 
 impl<'a> Font<'a> {
@@ -28,9 +30,19 @@ impl<'a> Font<'a> {
                 font,
                 fallback: false,
                 advance,
+                height_px: 0,
+                width_px: 0,
                 id: 0,
             }
         })
+    }
+
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    pub fn set_id(&mut self, id: u64) {
+        self.id = id;
     }
 
     pub fn face(&'_ self) -> &'_ Face<'_> {
@@ -45,6 +57,10 @@ impl<'a> Font<'a> {
         self.fallback
     }
 
+    pub(crate) fn set_fallback(&mut self, fallback: bool) {
+        self.fallback = fallback;
+    }
+
     pub(crate) fn ascender(&self) -> f32 {
         self.font.ascender() as f32
     }
@@ -53,16 +69,27 @@ impl<'a> Font<'a> {
         self.advance
     }
 
-    pub(crate) fn scale(&self, height_px: u32) -> f32 {
-        height_px as f32 / self.font.height() as f32
+    // Active font height.
+    pub(crate) fn set_height_px(&mut self, height_px: u32) {
+        self.height_px = height_px;
     }
 
-    pub(crate) fn char_width(&self, height_px: u32) -> u32 {
-        (self.advance * self.scale(height_px)) as u32
+    // Active font width.
+    pub(crate) fn set_width_px(&mut self, width_px: u32) {
+        self.width_px = width_px;
     }
 
-    pub(crate) fn underline_metrics(&self, height_px: u32, box_height_px: u32) -> (u32, u32) {
-        let scale = self.scale(height_px);
+    // Base width, preserving the aspect ratio of the font.
+    pub(crate) fn base_width_px(&self) -> u32 {
+        (self.advance * self.height_px as f32 / self.font.height() as f32) as u32
+    }
+
+    pub(crate) fn scale(&self) -> f32 {
+        self.height_px as f32 / self.font.height() as f32
+    }
+
+    pub(crate) fn underline_metrics(&self, box_height_px: u32) -> (u32, u32) {
+        let scale = self.scale();
 
         let ascender = self.font.ascender() as f32;
 
@@ -95,8 +122,8 @@ impl<'a> Font<'a> {
         }
     }
 
-    pub(crate) fn strikeout_metrics(&self, height_px: u32, _box_height: u32) -> (u32, u32) {
-        let scale = self.scale(height_px);
+    pub(crate) fn strikeout_metrics(&self) -> (u32, u32) {
+        let scale = self.scale();
 
         let ascender = self.font.ascender() as f32;
 

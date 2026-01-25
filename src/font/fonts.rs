@@ -1,8 +1,8 @@
 use crate::CellBox;
+use crate::font::font::Font;
 use log::warn;
 use ratatui_core::buffer::Cell;
 use ratatui_core::style::Modifier;
-use crate::font::font::Font;
 
 /// A collection of fonts to use for rendering. Supports font fallback.
 ///
@@ -10,18 +10,19 @@ use crate::font::font::Font;
 /// similar aspect ratio, or you may get unexpected results during rendering due
 /// to fallback.
 pub struct Fonts<'a> {
-    char_width_px: u32,
-    char_height_px: u32,
-    scale: f32,
+    width_px: u32,
+    height_px: u32,
+
     ascender: f32,
     em_advance: f32,
 
-    last_resort: Vec<Font<'a>>,
+    fallback: Vec<Font<'a>>,
 
     regular: Vec<Font<'a>>,
     bold: Vec<Font<'a>>,
     italic: Vec<Font<'a>>,
     bold_italic: Vec<Font<'a>>,
+
     // give an id in insertion order.
     id_count: u64,
 }
@@ -35,16 +36,17 @@ impl<'a> Fonts<'a> {
     /// The provided size_px will be the rendered height in pixels of all fonts
     /// in this collection.
     pub fn new(mut font: Font<'a>, size_px: u32) -> Self {
-        font.fallback = true;
-        font.id = 0;
+        font.set_height_px(size_px);
+        font.set_width_px(font.base_width_px());
+        font.set_fallback(true);
+        font.set_id(0);
 
         Self {
-            char_width_px: font.char_width(size_px),
-            char_height_px: size_px,
-            scale: font.scale(size_px),
+            width_px: font.base_width_px(),
+            height_px: size_px,
             ascender: font.ascender(),
             em_advance: font.em_advance(),
-            last_resort: vec![font],
+            fallback: vec![font],
             regular: vec![],
             bold: vec![],
             italic: vec![],
@@ -65,30 +67,25 @@ impl<'a> Fonts<'a> {
     /// in this collection.
     pub fn new_vec(mut fonts: Vec<Font<'a>>, size_px: u32) -> Self {
         fonts.iter_mut().enumerate().for_each(|(n, f)| {
-            f.fallback = true;
-            f.id = n as u64
+            f.set_height_px(size_px);
+            f.set_width_px(f.base_width_px());
+            f.set_fallback(true);
+            f.set_id(n as u64);
         });
         let id_count = fonts.len() as u64;
 
         Self {
-            char_width_px: size_px / 2,
-            char_height_px: size_px,
-            scale: 1.0,
-            ascender: size_px as f32,
-            em_advance: size_px as f32 / 2.0,
-            last_resort: fonts,
+            width_px: size_px / 2, // rough estimate
+            height_px: size_px,
+            ascender: size_px as f32,         // rough estimate
+            em_advance: size_px as f32 / 2.0, // rough estimate
+            fallback: fonts,
             regular: vec![],
             bold: vec![],
             italic: vec![],
             bold_italic: vec![],
             id_count,
         }
-    }
-
-    /// The height (in pixels) of all fonts.
-    #[inline]
-    pub fn height_px(&self) -> u32 {
-        self.char_height_px
     }
 
     #[inline]
@@ -101,50 +98,64 @@ impl<'a> Fonts<'a> {
         self.em_advance
     }
 
-    pub fn scale(&self) -> f32 {
-        self.scale
+    /// The height (in pixels) of all fonts.
+    #[inline]
+    pub fn height_px(&self) -> u32 {
+        self.height_px
     }
 
     /// Change the height of all fonts in this collection to the specified
     /// height in pixels.
-    pub fn set_size_px(&mut self, height_px: u32) {
-        self.char_height_px = height_px;
+    pub fn set_height_px(&mut self, height_px: u32) {
+        self.height_px = height_px;
+
+        self.regular
+            .iter_mut()
+            .chain(self.bold.iter_mut())
+            .chain(self.bold_italic.iter_mut())
+            .chain(self.italic.iter_mut())
+            .chain(self.fallback.iter_mut())
+            .for_each(|f| {
+                f.set_height_px(height_px);
+            });
 
         if !self.regular.is_empty()
             || !self.bold.is_empty()
             || !self.italic.is_empty()
             || !self.bold_italic.is_empty()
         {
-            (
-                self.char_width_px,
-                self.scale,
-                self.ascender,
-                self.em_advance,
-            ) = self
+            (self.width_px, self.ascender, self.em_advance) = self
                 .regular
                 .iter()
                 .chain(self.bold.iter())
                 .chain(self.italic.iter())
                 .chain(self.bold_italic.iter())
-                .map(|font| {
-                    (
-                        font.char_width(height_px),
-                        font.scale(height_px),
-                        font.ascender(),
-                        font.em_advance(),
-                    )
-                })
+                .map(|font| (font.base_width_px(), font.ascender(), font.em_advance()))
                 .next() /* first is fine */
                 .expect("font");
         } else {
-            self.char_width_px = self.char_height_px / 2;
-            self.scale = 1.0;
-            self.ascender = self.char_height_px as f32;
-            self.em_advance = self.char_height_px as f32 / 2.0;
+            self.width_px = self.height_px / 2;
+            self.ascender = self.height_px as f32;
+            self.em_advance = self.height_px as f32 / 2.0;
         }
 
-        assert!(self.char_height_px != 0);
-        assert!(self.char_width_px != 0);
+        self.regular
+            .iter_mut()
+            .chain(self.bold.iter_mut())
+            .chain(self.bold_italic.iter_mut())
+            .chain(self.italic.iter_mut())
+            .chain(self.fallback.iter_mut())
+            .for_each(|f| {
+                f.set_width_px(self.width_px);
+            });
+
+        assert_ne!(self.height_px, 0);
+        assert_ne!(self.width_px, 0);
+    }
+
+    /// The minimum width (in pixels) across all fonts.
+    pub fn width_px(&self) -> u32 {
+        self.width_px
     }
 
     /// Remove the non-fallback fonts.
@@ -153,6 +164,7 @@ impl<'a> Fonts<'a> {
         self.italic.clear();
         self.bold.clear();
         self.regular.clear();
+        self.set_height_px(self.height_px);
     }
 
     /// Add a collection of fonts for various styles. They will automatically be
@@ -165,7 +177,7 @@ impl<'a> Fonts<'a> {
     /// with a prior font.
     pub fn add_fonts(&mut self, fonts: impl IntoIterator<Item = Font<'a>>) {
         for mut font in fonts {
-            font.id = self.id_count;
+            font.set_id(self.id_count);
             self.id_count += 1;
 
             if !font.face().is_monospaced() {
@@ -181,18 +193,18 @@ impl<'a> Fonts<'a> {
                 self.regular.push(font);
             }
         }
-        self.set_size_px(self.char_height_px);
+        self.set_height_px(self.height_px);
     }
 
     /// Add a new collection of fonts for regular styled text. These fonts will
     /// come _after_ previously provided fonts in the fallback order.
     pub fn add_regular_fonts(&mut self, fonts: impl IntoIterator<Item = Font<'a>>) {
         for mut font in fonts {
-            font.id = self.id_count;
+            font.set_id(self.id_count);
             self.id_count += 1;
             self.regular.push(font);
         }
-        self.set_size_px(self.char_height_px);
+        self.set_height_px(self.height_px);
     }
 
     /// Add a new collection of fonts for bold styled text. These fonts will
@@ -203,11 +215,11 @@ impl<'a> Fonts<'a> {
     /// with fake bolding.
     pub fn add_bold_fonts(&mut self, fonts: impl IntoIterator<Item = Font<'a>>) {
         for mut font in fonts {
-            font.id = self.id_count;
+            font.set_id(self.id_count);
             self.id_count += 1;
             self.bold.push(font);
         }
-        self.set_size_px(self.char_height_px);
+        self.set_height_px(self.height_px);
     }
 
     /// Add a new collection of fonts for italic styled text. These fonts will
@@ -219,11 +231,11 @@ impl<'a> Fonts<'a> {
     /// italics.
     pub fn add_italic_fonts(&mut self, fonts: impl IntoIterator<Item = Font<'a>>) {
         for mut font in fonts {
-            font.id = self.id_count;
+            font.set_id(self.id_count);
             self.id_count += 1;
             self.italic.push(font);
         }
-        self.set_size_px(self.char_height_px);
+        self.set_height_px(self.height_px);
     }
 
     /// Add a new collection of fonts for bold italic styled text. These fonts
@@ -234,27 +246,22 @@ impl<'a> Fonts<'a> {
     /// with fake bolding.
     pub fn add_bold_italic_fonts(&mut self, fonts: impl IntoIterator<Item = Font<'a>>) {
         for mut font in fonts {
-            font.id = self.id_count;
+            font.set_id(self.id_count);
             self.id_count += 1;
             self.bold_italic.push(font);
         }
-        self.set_size_px(self.char_height_px);
+        self.set_height_px(self.height_px);
     }
 
     /// Size of a cell with the current font in px.
     pub fn cell_box(&self) -> CellBox {
         CellBox {
-            width: self.min_width_px(),
+            width: self.width_px(),
             height: self.height_px(),
             ascender: self.ascender(),
-            scale: self.scale(),
         }
     }
 
-    /// The minimum width (in pixels) across all fonts.
-    pub fn min_width_px(&self) -> u32 {
-        self.char_width_px
-    }
 
     pub(crate) fn count(&self) -> usize {
         1 + self.bold.len() + self.italic.len() + self.bold_italic.len() + self.regular.len()
@@ -266,8 +273,8 @@ impl<'a> Fonts<'a> {
             .chain(self.bold.iter())
             .chain(self.italic.iter())
             .chain(self.bold_italic.iter())
-            .chain(self.last_resort.iter())
-            .find(|v| v.id == id)
+            .chain(self.fallback.iter())
+            .find(|v| v.id() == id)
             .expect("font")
     }
 
@@ -281,7 +288,7 @@ impl<'a> Fonts<'a> {
                     .chain(self.italic.iter().map(|f| f))
                     .chain(self.bold.iter().map(|f| f))
                     .chain(self.regular.iter().map(|f| f))
-                    .chain(self.last_resort.iter().map(|f| f)),
+                    .chain(self.fallback.iter().map(|f| f)),
             )
         } else if cell.modifier.contains(Modifier::BOLD) {
             self.select_font(
@@ -290,7 +297,7 @@ impl<'a> Fonts<'a> {
                     .iter()
                     .map(|f| f)
                     .chain(self.regular.iter().map(|f| f))
-                    .chain(self.last_resort.iter().map(|f| f)),
+                    .chain(self.fallback.iter().map(|f| f)),
             )
         } else if cell.modifier.contains(Modifier::ITALIC) {
             self.select_font(
@@ -299,7 +306,7 @@ impl<'a> Fonts<'a> {
                     .iter()
                     .map(|f| f)
                     .chain(self.regular.iter().map(|f| f))
-                    .chain(self.last_resort.iter().map(|f| f)),
+                    .chain(self.fallback.iter().map(|f| f)),
             )
         } else {
             self.select_font(
@@ -307,7 +314,7 @@ impl<'a> Fonts<'a> {
                 self.regular
                     .iter()
                     .map(|f| f)
-                    .chain(self.last_resort.iter().map(|f| f)),
+                    .chain(self.fallback.iter().map(|f| f)),
             )
         }
     }
@@ -336,14 +343,14 @@ impl<'a> Fonts<'a> {
 
             if count > max {
                 max = count;
-                font = Some(candidate.id);
+                font = Some(candidate.id());
             }
 
             if count == last_idx + 1 {
                 break;
             }
 
-            last_resort = Some(candidate.id);
+            last_resort = Some(candidate.id());
         }
 
         font.unwrap_or_else(|| {

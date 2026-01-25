@@ -478,7 +478,7 @@ impl<'f, 's> WgpuBackend<'f, 's> {
     /// the screen the next time [`WgpuBackend::flush`] is called.
     /// A call to [ratatui_core::terminal::Terminal::draw] will do this.
     pub fn update_font_size(&mut self, new_font_size: u32) {
-        self.fonts.set_size_px(new_font_size);
+        self.fonts.set_height_px(new_font_size);
 
         rebuild_surface(
             self.fonts.cell_box(),
@@ -1334,7 +1334,7 @@ fn shape(
     queue: &Queue,
 ) -> UnicodeBuffer {
     let metrics = font.face();
-    let advance_scale = cell_box.scale;
+    let advance_scale = font.scale();
 
     let mut x = 0;
     let mut default_chars_wide = 1;
@@ -1430,18 +1430,18 @@ fn shape(
 
         let cursor_pos =
             if first_glyph && cursor_visible && (cell_idx as u16, row_idx as u16) == cursor {
-                font.underline_metrics(cell_box.height, cached.height)
+                font.underline_metrics(cached.height)
             } else {
                 (0, 0)
             };
 
         let underline_pos = if cell.modifier.contains(Modifier::UNDERLINED) {
-            font.underline_metrics(cell_box.height, cached.height)
+            font.underline_metrics(cached.height)
         } else {
             (0, 0)
         };
         let strikeout_pos = if cell.modifier.contains(Modifier::CROSSED_OUT) {
-            font.strikeout_metrics(cell_box.height, cached.height)
+            font.strikeout_metrics()
         } else {
             (0, 0)
         };
