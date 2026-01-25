@@ -1,5 +1,3 @@
-use std::num::NonZeroU32;
-
 use image::ImageBuffer;
 use image::Rgba;
 use image::load_from_memory;
@@ -13,15 +11,9 @@ use ratatui_core::terminal::Terminal;
 use ratatui_core::text::Line;
 use ratatui_widgets::block::Block;
 use ratatui_widgets::paragraph::Paragraph;
-use rustybuzz::ttf_parser::RasterGlyphImage;
-use rustybuzz::ttf_parser::RasterImageFormat;
 use serial_test::serial;
-use wgpu::CommandEncoderDescriptor;
-use wgpu::Device;
-use wgpu::Extent3d;
-use wgpu::Queue;
+use std::fs::create_dir_all;
 use wgpu::TextureFormat;
-use wgpu::wgt::PollType;
 
 #[test]
 #[serial]
@@ -59,8 +51,9 @@ fn a_z() {
 
     let image = ImageBuffer::<Rgba<u8>, _>::from_raw(512, 72, &*buffer).unwrap();
 
+    _ = create_dir_all("target/tmp");
     image::save_buffer(
-        "a_z.png",
+        "target/tmp/a_z.png",
         image.as_flat_samples().samples,
         512,
         72,
@@ -72,11 +65,9 @@ fn a_z() {
     let golden = load_from_memory(include_bytes!("goldens/a_z.png")).unwrap();
     let golden_pixels = golden.pixels().map(|(_, _, px)| px).collect::<Vec<_>>();
 
-    assert!(
-        pixels == golden_pixels,
-        "Rendered image differs from golden"
-    );
+    assert_eq!(pixels, golden_pixels, "Rendered image differs from golden");
 
+    drop(buffer);
     terminal.backend().unmap_headless_buffer();
 }
 
@@ -116,8 +107,9 @@ fn arabic() {
 
     let image = ImageBuffer::<Rgba<u8>, _>::from_raw(256, 72, &*buffer).unwrap();
 
+    _ = create_dir_all("target/tmp");
     image::save_buffer(
-        "arabic.png",
+        "target/tmp/arabic.png",
         image.as_flat_samples().samples,
         256,
         72,
@@ -128,11 +120,9 @@ fn arabic() {
     let golden = load_from_memory(include_bytes!("goldens/arabic.png")).unwrap();
     let golden_pixels = golden.pixels().map(|(_, _, px)| px).collect::<Vec<_>>();
 
-    assert!(
-        pixels == golden_pixels,
-        "Rendered image differs from golden"
-    );
+    assert_eq!(pixels, golden_pixels, "Rendered image differs from golden");
 
+    drop(buffer);
     terminal.backend().unmap_headless_buffer();
 }
 
@@ -171,8 +161,9 @@ fn really_wide() {
 
     let image = ImageBuffer::<Rgba<u8>, _>::from_raw(512, 72, &*buffer).unwrap();
 
+    _ = create_dir_all("target/tmp");
     image::save_buffer(
-        "really_wide.png",
+        "target/tmp/really_wide.png",
         image.as_flat_samples().samples,
         512,
         72,
@@ -183,11 +174,9 @@ fn really_wide() {
     let golden = load_from_memory(include_bytes!("goldens/really_wide.png")).unwrap();
     let golden_pixels = golden.pixels().map(|(_, _, px)| px).collect::<Vec<_>>();
 
-    assert!(
-        pixels == golden_pixels,
-        "Rendered image differs from golden"
-    );
+    assert_eq!(pixels, golden_pixels, "Rendered image differs from golden");
 
+    drop(buffer);
     terminal.backend().unmap_headless_buffer();
 }
 
@@ -230,8 +219,9 @@ fn mixed() {
 
     let image = ImageBuffer::<Rgba<u8>, _>::from_raw(512, 72, &*buffer).unwrap();
 
+    _ = create_dir_all("target/tmp");
     image::save_buffer(
-        "mixed.png",
+        "target/tmp/mixed.png",
         image.as_flat_samples().samples,
         512,
         72,
@@ -242,10 +232,9 @@ fn mixed() {
     let golden = load_from_memory(include_bytes!("goldens/mixed.png")).unwrap();
     let golden_pixels = golden.pixels().map(|(_, _, px)| px).collect::<Vec<_>>();
 
-    assert!(
-        pixels == golden_pixels,
-        "Rendered image differs from golden"
-    );
+    assert_eq!(pixels, golden_pixels, "Rendered image differs from golden");
+
+    drop(buffer);
     terminal.backend().unmap_headless_buffer();
 }
 
@@ -292,8 +281,9 @@ fn mixed_colors() {
 
     let image = ImageBuffer::<Rgba<u8>, _>::from_raw(512, 72, &*buffer).unwrap();
 
+    _ = create_dir_all("target/tmp");
     image::save_buffer(
-        "mixed_colors.png",
+        "target/tmp/mixed_colors.png",
         image.as_flat_samples().samples,
         512,
         72,
@@ -304,11 +294,9 @@ fn mixed_colors() {
     let golden = load_from_memory(include_bytes!("goldens/mixed_colors.png")).unwrap();
     let golden_pixels = golden.pixels().map(|(_, _, px)| px).collect::<Vec<_>>();
 
-    assert!(
-        pixels == golden_pixels,
-        "Rendered image differs from golden"
-    );
+    assert_eq!(pixels, golden_pixels, "Rendered image differs from golden");
 
+    drop(buffer);
     terminal.backend().unmap_headless_buffer();
 }
 
@@ -347,8 +335,9 @@ fn overlap() {
 
     let image = ImageBuffer::<Rgba<u8>, _>::from_raw(256, 72, &*buffer).unwrap();
 
+    _ = create_dir_all("target/tmp");
     image::save_buffer(
-        "overlap_initial.png",
+        "target/tmp/overlap_initial.png",
         image.as_flat_samples().samples,
         256,
         72,
@@ -359,10 +348,7 @@ fn overlap() {
     let golden = load_from_memory(include_bytes!("goldens/overlap_initial.png")).unwrap();
     let golden_pixels = golden.pixels().map(|(_, _, px)| px).collect::<Vec<_>>();
 
-    assert!(
-        pixels == golden_pixels,
-        "Rendered image differs from golden"
-    );
+    assert_eq!(pixels, golden_pixels, "Rendered image differs from golden");
 
     drop(buffer);
     terminal.backend().unmap_headless_buffer();
@@ -383,8 +369,9 @@ fn overlap() {
 
     let image = ImageBuffer::<Rgba<u8>, _>::from_raw(256, 72, &*buffer).unwrap();
 
+    _ = create_dir_all("target/tmp");
     image::save_buffer(
-        "overlap_post.png",
+        "target/tmp/overlap_post.png",
         image.as_flat_samples().samples,
         256,
         72,
@@ -395,11 +382,9 @@ fn overlap() {
     let golden = load_from_memory(include_bytes!("goldens/overlap_post.png")).unwrap();
     let golden_pixels = golden.pixels().map(|(_, _, px)| px).collect::<Vec<_>>();
 
-    assert!(
-        pixels == golden_pixels,
-        "Rendered image differs from golden"
-    );
+    assert_eq!(pixels, golden_pixels, "Rendered image differs from golden");
 
+    drop(buffer);
     terminal.backend().unmap_headless_buffer();
 }
 
@@ -410,8 +395,7 @@ fn overlap_colors() {
         futures_lite::future::block_on(
             Builder::<DefaultPostProcessorBuilder>::default()
                 .with_fallback_fonts(Fonts::new(
-                    Font::new(include_bytes!("fonts/Fairfax.ttf"))
-                        .expect("Invalid font file"),
+                    Font::new(include_bytes!("fonts/Fairfax.ttf")).expect("Invalid font file"),
                     24,
                 ))
                 .with_width_and_height(256, 72)
@@ -439,8 +423,9 @@ fn overlap_colors() {
 
     let image = ImageBuffer::<Rgba<u8>, _>::from_raw(256, 72, &*buffer).unwrap();
 
+    _ = create_dir_all("target/tmp");
     image::save_buffer(
-        "overlap_colors.png",
+        "target/tmp/overlap_colors.png",
         image.as_flat_samples().samples,
         256,
         72,
@@ -451,10 +436,9 @@ fn overlap_colors() {
     let golden = load_from_memory(include_bytes!("goldens/overlap_colors.png")).unwrap();
     let golden_pixels = golden.pixels().map(|(_, _, px)| px).collect::<Vec<_>>();
 
-    assert!(
-        pixels == golden_pixels,
-        "Rendered image differs from golden"
-    );
+    assert_eq!(pixels, golden_pixels, "Rendered image differs from golden");
+
+    drop(buffer);
     terminal.backend().unmap_headless_buffer();
 }
 
@@ -493,8 +477,9 @@ fn rgb_conversion() {
 
     let image = ImageBuffer::<Rgba<u8>, _>::from_raw(256, 72, &*buffer).unwrap();
 
+    _ = create_dir_all("target/tmp");
     image::save_buffer(
-        "rgb_conversion.png",
+        "target/tmp/rgb_conversion.png",
         image.as_flat_samples().samples,
         256,
         72,
@@ -505,11 +490,9 @@ fn rgb_conversion() {
     let golden = load_from_memory(include_bytes!("goldens/rgb_conversion.png")).unwrap();
     let golden_pixels = golden.pixels().map(|(_, _, px)| px).collect::<Vec<_>>();
 
-    assert!(
-        pixels == golden_pixels,
-        "Rendered image differs from golden"
-    );
+    assert_eq!(pixels, golden_pixels, "Rendered image differs from golden");
 
+    drop(buffer);
     terminal.backend().unmap_headless_buffer();
 }
 
@@ -540,7 +523,7 @@ fn srgb_conversion() {
             f.render_widget(Paragraph::new("TEST"), area);
         })
         .unwrap();
-    
+
     let buffer = terminal
         .backend()
         .map_headless_buffer()
@@ -548,8 +531,9 @@ fn srgb_conversion() {
 
     let image = ImageBuffer::<Rgba<u8>, _>::from_raw(256, 72, &*buffer).unwrap();
 
+    _ = create_dir_all("target/tmp");
     image::save_buffer(
-        "srgb_conversion.png",
+        "target/tmp/srgb_conversion.png",
         image.as_flat_samples().samples,
         256,
         72,
@@ -561,10 +545,8 @@ fn srgb_conversion() {
     let golden = load_from_memory(include_bytes!("goldens/srgb_conversion.png")).unwrap();
     let golden_pixels = golden.pixels().map(|(_, _, px)| px).collect::<Vec<_>>();
 
-    assert!(
-        pixels == golden_pixels,
-        "Rendered image differs from golden"
-    );
+    assert_eq!(pixels, golden_pixels, "Rendered image differs from golden");
 
+    drop(buffer);
     terminal.backend().unmap_headless_buffer();
 }
