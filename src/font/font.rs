@@ -1,4 +1,5 @@
 use rustybuzz::Face;
+use rustybuzz::ttf_parser::GlyphId;
 
 /// A Font which can be used for rendering.
 #[derive(Clone)]
@@ -61,10 +62,11 @@ impl<'a> Font<'a> {
         self.fallback = fallback;
     }
 
-    pub(crate) fn ascender(&self) -> f32 {
-        self.font.ascender() as f32
+    pub(crate) fn ascender(&self) -> u32 {
+        (self.font.ascender() as f32 * self.height_px as f32 / self.font.height() as f32) as u32
     }
 
+    // Base advance. Or em (or en).
     pub(crate) fn em_advance(&self) -> f32 {
         self.advance
     }
@@ -84,21 +86,76 @@ impl<'a> Font<'a> {
         (self.advance * self.height_px as f32 / self.font.height() as f32) as u32
     }
 
-    pub(crate) fn scale(&self) -> f32 {
-        self.height_px as f32 / self.font.height() as f32
+    pub(crate) fn scale_y(&self, _glyph_id: u16, block_char: bool) -> f32 {
+        if self.fallback && block_char {
+            self.height_px as f32 / self.font.height() as f32
+        } else if self.fallback {
+            self.height_px as f32 / self.font.height() as f32
+        } else if !self.font.is_monospaced() {
+            self.height_px as f32 / self.font.height() as f32
+        } else {
+            self.height_px as f32 / self.font.height() as f32
+        }
     }
 
-    pub(crate) fn underline_metrics(&self, box_height_px: u32) -> (u32, u32) {
-        let scale = self.scale();
+    pub(crate) fn scale_x(&self, glyph_id: u16, block_char: bool) -> f32 {
+        if self.fallback && block_char {
+            // fit vertically
+            self.height_px as f32 / self.font.height() as f32
+        } else if self.fallback {
+            let actual_width = self
+                .font
+                .glyph_hor_advance(GlyphId(glyph_id))
+                .unwrap_or_default();
 
-        let ascender = self.font.ascender() as f32;
+            // fit either horizontally or vertically.
+            // preserve aspect.
+            let scale_x = self.width_px as f32 / actual_width as f32;
+            let scale_y = self.height_px as f32 / self.font.height() as f32;
+
+            if scale_x / scale_y > 1.0 {
+                scale_y
+            } else {
+                scale_x
+            }
+        } else if !self.font.is_monospaced() {
+            let actual_width = self
+                .font
+                .glyph_hor_advance(GlyphId(glyph_id))
+                .unwrap_or_default();
+            let scale_x = self.width_px as f32 / actual_width as f32;
+            let scale_y = self.height_px as f32 / self.font.height() as f32;
+
+            if scale_x / scale_y > 1.0 {
+                scale_y
+            } else {
+                scale_x
+            }
+        } else {
+            // regular fonts will probably be from one font family and therefore have
+            // more regular properties.
+
+            self.height_px as f32 / self.font.height() as f32
+        }
+    }
+
+    // pub(crate) fn scale(&self) -> f32 {
+    //     self.height_px as f32 / self.font.height() as f32
+    // }
+
+    pub(crate) fn underline_metrics(
+        &self,
+        glyph_id: u16,
+        ascender: u32,
+        box_height_px: u32,
+    ) -> (u32, u32) {
+        let scale = self.scale_x(glyph_id, false);
 
         let underline_position = self
             .font
             .underline_metrics()
             .map(|m| m.position as f32)
             .unwrap_or(0.0);
-        let underline_position = ascender - underline_position;
 
         let underline_thickness = self
             .font
@@ -108,7 +165,7 @@ impl<'a> Font<'a> {
         // default underlines are a bit thin for larger font-sizes.
         let underline_thickness = underline_thickness * 1.3;
 
-        let underline_position = (underline_position * scale) as u32;
+        let underline_position = ascender - (underline_position * scale) as u32;
         let underline_thickness = ((underline_thickness * scale) as u32).max(1);
 
         // might overflow the box
@@ -122,10 +179,8 @@ impl<'a> Font<'a> {
         }
     }
 
-    pub(crate) fn strikeout_metrics(&self) -> (u32, u32) {
-        let scale = self.scale();
-
-        let ascender = self.font.ascender() as f32;
+    pub(crate) fn strikeout_metrics(&self, glyph_id: u16, ascender: u32) -> (u32, u32) {
+        let scale = self.scale_x(glyph_id, false);
 
         let strikeout_position = self
             .font
@@ -133,9 +188,9 @@ impl<'a> Font<'a> {
             .map(|m| m.position as f32)
             .unwrap_or_default();
         let strikeout_position = if strikeout_position > 0.0 {
-            ascender - strikeout_position
+            strikeout_position
         } else {
-            ascender as f32 * 0.7 /* observed average */
+            self.font.ascender() as f32 * 0.3 /* observed average */
         };
 
         let strikeout_thickness = self
@@ -147,8 +202,8 @@ impl<'a> Font<'a> {
         let strikeout_thickness = strikeout_thickness * 1.8;
 
         (
-            (strikeout_position * scale) as u32,
-            ((strikeout_position + strikeout_thickness) * scale) as u32,
+            ascender - (strikeout_position * scale) as u32,
+            ascender - ((strikeout_position + strikeout_thickness) * scale) as u32,
         )
     }
 }

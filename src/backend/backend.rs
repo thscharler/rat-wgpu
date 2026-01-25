@@ -1334,7 +1334,6 @@ fn shape(
     queue: &Queue,
 ) -> UnicodeBuffer {
     let metrics = font.face();
-    let advance_scale = font.scale();
 
     let mut x = 0;
     let mut default_chars_wide = 1;
@@ -1388,8 +1387,12 @@ fn shape(
             }
         }
 
+        let block_char = (ch as u32) >= 0x2500 && (ch as u32) <= 0x259F;
+        let advance_scale = font.scale_x(info.glyph_id as u16, block_char);
+        let advance_scale_y = font.scale_y(info.glyph_id as u16, block_char);
+
         let basey = row_idx as i32 * cell_box.height as i32
-            + (position.y_offset as f32 * advance_scale) as i32;
+            + (position.y_offset as f32 * advance_scale_y) as i32;
 
         let glyph_advance = (position.x_advance as f32 * advance_scale) as i32;
         let glyph_offset = (position.x_offset as f32 * advance_scale) as i32;
@@ -1428,20 +1431,26 @@ fn shape(
                 .cached
                 .get(&key, chars_wide as u32 * cell_box.width, cell_box.height);
 
+        let mut view_modifier = cell.modifier;
+        if !first_glyph {
+            view_modifier.set(Modifier::UNDERLINED, false);
+            view_modifier.set(Modifier::CROSSED_OUT, false);
+        }
+
         let cursor_pos =
             if first_glyph && cursor_visible && (cell_idx as u16, row_idx as u16) == cursor {
-                font.underline_metrics(cached.height)
+                font.underline_metrics(info.glyph_id as u16, cell_box.ascender, cached.height)
             } else {
                 (0, 0)
             };
 
-        let underline_pos = if cell.modifier.contains(Modifier::UNDERLINED) {
-            font.underline_metrics(cached.height)
+        let underline_pos = if view_modifier.contains(Modifier::UNDERLINED) {
+            font.underline_metrics(info.glyph_id as u16, cell_box.ascender, cached.height)
         } else {
             (0, 0)
         };
-        let strikeout_pos = if cell.modifier.contains(Modifier::CROSSED_OUT) {
-            font.strikeout_metrics()
+        let strikeout_pos = if view_modifier.contains(Modifier::CROSSED_OUT) {
+            font.strikeout_metrics(info.glyph_id as u16, cell_box.ascender)
         } else {
             (0, 0)
         };
@@ -1455,7 +1464,7 @@ fn shape(
                     cached: *cached,
                     fg: cell.fg,
                     bg: cell.bg,
-                    modifier: cell.modifier,
+                    modifier: view_modifier,
                     underline_pos_min: underline_pos.0 as u16,
                     underline_pos_max: underline_pos.1 as u16,
                     strikeout_pos_min: strikeout_pos.0 as u16,
@@ -1470,15 +1479,15 @@ fn shape(
 
         let is_emoji =
             ch.is_emoji_char() && ch.general_category_group() != GeneralCategoryGroup::Number;
-        let block_char = (ch as u32) >= 0x2500 && (ch as u32) <= 0x259F;
 
         let (cached, image) = rasterize_glyph(
             cached,
             metrics,
             info,
-            cell.modifier.contains(Modifier::BOLD),
-            cell.modifier.contains(Modifier::ITALIC),
+            view_modifier.contains(Modifier::BOLD),
+            view_modifier.contains(Modifier::ITALIC),
             advance_scale,
+            advance_scale_y,
             cell_box.ascender,
             is_emoji,
             block_char,
@@ -1497,7 +1506,7 @@ fn shape(
                 cached,
                 fg: cell.fg,
                 bg: cell.bg,
-                modifier: cell.modifier,
+                modifier: view_modifier,
                 underline_pos_min: underline_pos.0 as u16,
                 underline_pos_max: underline_pos.1 as u16,
                 strikeout_pos_min: strikeout_pos.0 as u16,

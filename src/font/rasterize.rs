@@ -10,26 +10,18 @@ use unicode_properties::GeneralCategory;
 
 pub(crate) fn rasterize_glyph(
     cached: Entry,
-    metrics: &rustybuzz::Face,
+    face: &rustybuzz::Face,
     info: &rustybuzz::GlyphInfo,
     bold: bool,
     italic: bool,
     advance_scale: f32,
-    mut ascender: f32,
+    advance_scale_y: f32,
+    ascender: u32,
     emoji: bool,
     block_char: bool,
     category: GeneralCategory,
     is_fallback: bool,
 ) -> (CacheRect, Vec<u32>) {
-    let actual_width = metrics
-        .glyph_hor_advance(GlyphId(info.glyph_id as _))
-        .unwrap_or_default();
-    let actual_width_px = if actual_width == 0 {
-        cached.width
-    } else {
-        (actual_width as f32 * advance_scale) as u32
-    };
-
     let computed_offset_x;
     let computed_offset_y;
 
@@ -38,61 +30,51 @@ pub(crate) fn rasterize_glyph(
     if is_fallback && block_char {
         // block-chars must always scale according to the originating font.
         // otherwise this leaves gaps.
-        let rect_scale_y = cached.height as f32 / (metrics.height() as f32);
-
-        ascender = (metrics.ascender() as f32) * (rect_scale_y / advance_scale);
+        // they also must not be centered.
 
         computed_offset_x = 0.0;
         computed_offset_y = 0.0;
 
-        scale = rect_scale_y * 2.0;
-        scale_y = rect_scale_y * 2.0;
+        scale = advance_scale * 2.0;
+        scale_y = advance_scale_y * 2.0;
     } else if is_fallback {
         // glyphs from a fallback font will probably not fit.
         // scale them down either vertically or horizontally, whatever fits.
         // then align them centered.
         // and later render them at the same baseline as the regular font.
 
-        let mut rect_scale_x = cached.width as f32 / (actual_width as f32);
-        let rect_scale_y = cached.height as f32 / metrics.height() as f32;
+        let actual_width = face
+            .glyph_hor_advance(GlyphId(info.glyph_id as u16))
+            .unwrap_or_default();
 
-        if rect_scale_x / rect_scale_y > 1.0 {
-            rect_scale_x = rect_scale_y;
-            computed_offset_x = (cached.width as f32 - actual_width as f32 * rect_scale_y) / 2.0;
-        } else {
-            computed_offset_x = 0.0;
-        }
+        computed_offset_x = (cached.width as f32 - actual_width as f32 * advance_scale) / 2.0;
         computed_offset_y = 0.0;
 
-        scale = rect_scale_x * 2.0;
-        scale_y = rect_scale_y * 2.0;
-    } else if !metrics.is_monospaced() {
-        let mut rect_scale_x = cached.width as f32 / (actual_width as f32);
+        scale = advance_scale * 2.0;
+        scale_y = advance_scale_y * 2.0;
+    } else if !face.is_monospaced() {
+        let actual_width = face
+            .glyph_hor_advance(GlyphId(info.glyph_id as u16))
+            .unwrap_or_default();
 
-        if rect_scale_x / advance_scale > 1.0 {
-            rect_scale_x = advance_scale;
-            computed_offset_x = (cached.width as f32 - actual_width as f32 * advance_scale) / 2.0;
-        } else {
-            computed_offset_x = 0.0;
-        }
+        computed_offset_x = (cached.width as f32 - actual_width as f32 * advance_scale) / 2.0;
         computed_offset_y = 0.0;
 
-        scale = rect_scale_x * 2.0;
-        scale_y = advance_scale * 2.0;
+        scale = advance_scale * 2.0;
+        scale_y = advance_scale_y * 2.0;
     } else {
         // regular fonts will probably be from one font family and therefore have
         // more regular properties.
-        let rect_scale = cached.width as f32 / actual_width_px as f32;
 
         // don't offset. font should fit.
         computed_offset_x = 0.0;
         computed_offset_y = 0.0;
 
-        scale = rect_scale * advance_scale * 2.0;
-        scale_y = scale;
+        scale = advance_scale * 2.0;
+        scale_y = advance_scale_y * 2.0;
     }
 
-    let skew = if !emoji && !metrics.is_italic() && italic {
+    let skew = if !emoji && !face.is_italic() && italic {
         Transform::new(
             /* scale x */ 1.0,
             /* skew x */ 0.0,
@@ -154,14 +136,14 @@ pub(crate) fn rasterize_glyph(
     );
 
     let mut painter = Painter::new(
-        metrics,
+        face,
         &mut target,
         skew,
         scale,
-        ascender * advance_scale * 2.0 + computed_offset_y,
+        ascender as f32 * 2.0 + computed_offset_y,
         computed_offset_x,
     );
-    if metrics
+    if face
         .paint_color_glyph(
             GlyphId(info.glyph_id as _),
             0,
@@ -203,7 +185,7 @@ pub(crate) fn rasterize_glyph(
         );
     }
 
-    if let Some(raster) = metrics.glyph_raster_image(GlyphId(info.glyph_id as _), u16::MAX) {
+    if let Some(raster) = face.glyph_raster_image(GlyphId(info.glyph_id as _), u16::MAX) {
         if let Some((cache_rect, image)) =
             extract_color_image(&mut image, raster, cached, advance_scale)
         {
@@ -218,7 +200,7 @@ pub(crate) fn rasterize_glyph(
     }
 
     let mut render = Outline::default();
-    if let Some(bounds) = metrics.outline_glyph(GlyphId(info.glyph_id as _), &mut render) {
+    if let Some(bounds) = face.outline_glyph(GlyphId(info.glyph_id as _), &mut render) {
         let path = render.finish();
 
         // Some fonts return bounds that are entirely negative. I'm not sure why this
@@ -230,7 +212,7 @@ pub(crate) fn rasterize_glyph(
             0.
         };
         let x_off = x_off * scale + computed_offset_x;
-        let y_off = ascender * advance_scale * 2.0 + computed_offset_y;
+        let y_off = ascender as f32 * 2.0 + computed_offset_y;
 
         let mut target = DrawTarget::from_backing(
             cached.width as i32 * 2,
@@ -249,7 +231,7 @@ pub(crate) fn rasterize_glyph(
             &DrawOptions::default(),
         );
 
-        if !metrics.is_bold() && bold {
+        if !face.is_bold() && bold {
             target.stroke(
                 &path,
                 &raqote::Source::Solid(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255)),
@@ -310,7 +292,7 @@ pub(crate) fn rasterize_glyph(
         );
     }
 
-    if let Some(raster) = metrics.glyph_raster_image(GlyphId(info.glyph_id as _), u16::MAX) {
+    if let Some(raster) = face.glyph_raster_image(GlyphId(info.glyph_id as _), u16::MAX) {
         if raster.width != 0 && raster.height != 0 {
             if let Some((cached, image)) =
                 extract_bw_image(&mut image, raster, cached, advance_scale)

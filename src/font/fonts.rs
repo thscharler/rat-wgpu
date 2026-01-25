@@ -12,8 +12,8 @@ use ratatui_core::style::Modifier;
 pub struct Fonts<'a> {
     width_px: u32,
     height_px: u32,
+    ascender: u32,
 
-    ascender: f32,
     em_advance: f32,
 
     fallback: Vec<Font<'a>>,
@@ -77,7 +77,7 @@ impl<'a> Fonts<'a> {
         Self {
             width_px: size_px / 2, // rough estimate
             height_px: size_px,
-            ascender: size_px as f32,         // rough estimate
+            ascender: size_px * 4 / 5,         // rough estimate
             em_advance: size_px as f32 / 2.0, // rough estimate
             fallback: fonts,
             regular: vec![],
@@ -89,7 +89,7 @@ impl<'a> Fonts<'a> {
     }
 
     #[inline]
-    pub fn ascender(&self) -> f32 {
+    pub fn ascender(&self) -> u32 {
         self.ascender
     }
 
@@ -135,7 +135,7 @@ impl<'a> Fonts<'a> {
                 .expect("font");
         } else {
             self.width_px = self.height_px / 2;
-            self.ascender = self.height_px as f32;
+            self.ascender = self.height_px * 4 / 5;
             self.em_advance = self.height_px as f32 / 2.0;
         }
 

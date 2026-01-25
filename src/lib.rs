@@ -24,7 +24,7 @@ pub struct CellBox {
     /// Height in px.
     pub height: u32,
     /// Baseline for glyphs. Measured from the top of the box.
-    pub ascender: f32,
+    pub ascender: u32,
 }
 
 impl CellBox {
