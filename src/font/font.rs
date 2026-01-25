@@ -98,7 +98,7 @@ impl<'a> Font<'a> {
         }
     }
 
-    pub(crate) fn scale_x(&self, glyph_id: u16, block_char: bool) -> f32 {
+    pub(crate) fn scale_x(&self, glyph_id: u16, block_char: bool, char_width: u32) -> f32 {
         if self.fallback && block_char {
             // fit vertically
             self.height_px as f32 / self.font.height() as f32
@@ -110,7 +110,7 @@ impl<'a> Font<'a> {
 
             // fit either horizontally or vertically.
             // preserve aspect.
-            let scale_x = self.width_px as f32 / actual_width as f32;
+            let scale_x = (self.width_px * char_width) as f32 / actual_width as f32;
             let scale_y = self.height_px as f32 / self.font.height() as f32;
 
             if scale_x / scale_y > 1.0 {
@@ -123,7 +123,7 @@ impl<'a> Font<'a> {
                 .font
                 .glyph_hor_advance(GlyphId(glyph_id))
                 .unwrap_or_default();
-            let scale_x = self.width_px as f32 / actual_width as f32;
+            let scale_x = (self.width_px * char_width) as f32 / actual_width as f32;
             let scale_y = self.height_px as f32 / self.font.height() as f32;
 
             if scale_x / scale_y > 1.0 {
@@ -139,17 +139,14 @@ impl<'a> Font<'a> {
         }
     }
 
-    // pub(crate) fn scale(&self) -> f32 {
-    //     self.height_px as f32 / self.font.height() as f32
-    // }
-
     pub(crate) fn underline_metrics(
         &self,
         glyph_id: u16,
         ascender: u32,
+        char_width: u32,
         box_height_px: u32,
     ) -> (u32, u32) {
-        let scale = self.scale_x(glyph_id, false);
+        let scale = self.scale_x(glyph_id, false, char_width);
 
         let underline_position = self
             .font
@@ -179,8 +176,13 @@ impl<'a> Font<'a> {
         }
     }
 
-    pub(crate) fn strikeout_metrics(&self, glyph_id: u16, ascender: u32) -> (u32, u32) {
-        let scale = self.scale_x(glyph_id, false);
+    pub(crate) fn strikeout_metrics(
+        &self,
+        glyph_id: u16,
+        ascender: u32,
+        char_width: u32,
+    ) -> (u32, u32) {
+        let scale = self.scale_x(glyph_id, false, char_width);
 
         let strikeout_position = self
             .font

@@ -1388,7 +1388,7 @@ fn shape(
         }
 
         let block_char = (ch as u32) >= 0x2500 && (ch as u32) <= 0x259F;
-        let advance_scale = font.scale_x(info.glyph_id as u16, block_char);
+        let advance_scale = font.scale_x(info.glyph_id as u16, block_char, chars_wide as u32);
         let advance_scale_y = font.scale_y(info.glyph_id as u16, block_char);
 
         let basey = row_idx as i32 * cell_box.height as i32
@@ -1439,18 +1439,28 @@ fn shape(
 
         let cursor_pos =
             if first_glyph && cursor_visible && (cell_idx as u16, row_idx as u16) == cursor {
-                font.underline_metrics(info.glyph_id as u16, cell_box.ascender, cached.height)
+                font.underline_metrics(
+                    info.glyph_id as u16,
+                    cell_box.ascender,
+                    chars_wide as u32,
+                    cached.height,
+                )
             } else {
                 (0, 0)
             };
 
         let underline_pos = if view_modifier.contains(Modifier::UNDERLINED) {
-            font.underline_metrics(info.glyph_id as u16, cell_box.ascender, cached.height)
+            font.underline_metrics(
+                info.glyph_id as u16,
+                cell_box.ascender,
+                chars_wide as u32,
+                cached.height,
+            )
         } else {
             (0, 0)
         };
         let strikeout_pos = if view_modifier.contains(Modifier::CROSSED_OUT) {
-            font.strikeout_metrics(info.glyph_id as u16, cell_box.ascender)
+            font.strikeout_metrics(info.glyph_id as u16, chars_wide as u32, cell_box.ascender)
         } else {
             (0, 0)
         };
