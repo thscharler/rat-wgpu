@@ -506,6 +506,7 @@ impl<'f, 's> WgpuBackend<'f, 's> {
         flush_blink(
             blinking,
             bounds,
+            self.fonts.cell_box(),
             &mut self.tui_surface,
             &self.rendered,
             &mut self.wgpu_vertices,
@@ -972,7 +973,61 @@ fn draw_tui(
 
     let cell_box = fonts.cell_box();
 
-    // image preparation
+    rendered.resize_with(
+        bounds.height as usize * bounds.width as usize,
+        Rendered::default,
+    );
+
+    for (x, y, cell) in content {
+        let offset = y as usize * bounds.width as usize;
+        let index = offset + x as usize;
+
+        tui_surface
+            .fast_blinking
+            .set(index, cell.modifier.contains(Modifier::RAPID_BLINK));
+        tui_surface
+            .slow_blinking
+            .set(index, cell.modifier.contains(Modifier::SLOW_BLINK));
+
+        // every other cell any of the glyphs has touched is dirty now.
+        for (rx, ry, _glyph_id, render_info) in &rendered[index] {
+            let glyph_pos = cell_box.cell_pos(*rx, *ry, bounds);
+            let glyph_pos2 = cell_box.cell_pos(
+                *rx + render_info.cached.width as i32,
+                *ry + render_info.cached.height as i32,
+                bounds,
+            );
+
+            for y in glyph_pos.y..=glyph_pos2.y {
+                for x in glyph_pos.x..=glyph_pos2.x {
+                    tui_surface
+                        .dirty_cells
+                        .set((y * bounds.width + x) as usize, true);
+                }
+                tui_surface.dirty_rows.set(y as usize, true);
+            }
+        }
+
+        tui_surface.cells[index] = cell.clone();
+        tui_surface.cell_font[index] = fonts.font_for_cell(cell);
+        tui_surface.dirty_cells.set(index, true);
+
+        let new_symbol_width = tui_surface.cells[index]
+            .symbol()
+            .chars()
+            .filter(|c| c.general_category() != GeneralCategory::Format)
+            .next()
+            .unwrap_or(' ')
+            .width()
+            .unwrap_or(1);
+        if index + 1 < index + new_symbol_width {
+            tui_surface.cells[index + 1..index + new_symbol_width].fill(NULL_CELL);
+            tui_surface.dirty_cells[index + 1..index + new_symbol_width].fill(true);
+        }
+
+        tui_surface.dirty_rows.set(y as usize, true);
+    }
+
     {
         let mut images = Vec::new();
         let image_buffer = tui_surface.image_frame.buffer();
@@ -1059,61 +1114,6 @@ fn draw_tui(
             }
         }
         tui_surface.images = images;
-    }
-
-    rendered.resize_with(
-        bounds.height as usize * bounds.width as usize,
-        Rendered::default,
-    );
-
-    for (x, y, cell) in content {
-        let offset = y as usize * bounds.width as usize;
-        let index = offset + x as usize;
-
-        tui_surface
-            .fast_blinking
-            .set(index, cell.modifier.contains(Modifier::RAPID_BLINK));
-        tui_surface
-            .slow_blinking
-            .set(index, cell.modifier.contains(Modifier::SLOW_BLINK));
-
-        // every other cell any of the glyphs has touched is dirty now.
-        for (rx, ry, _glyph_id, render_info) in &rendered[index] {
-            let glyph_pos = cell_box.cell_pos(*rx, *ry, bounds);
-            let glyph_pos2 = cell_box.cell_pos(
-                *rx + render_info.cached.width as i32,
-                *ry + render_info.cached.height as i32,
-                bounds,
-            );
-
-            for y in glyph_pos.y..=glyph_pos2.y {
-                for x in glyph_pos.x..=glyph_pos2.x {
-                    tui_surface
-                        .dirty_cells
-                        .set((y * bounds.width + x) as usize, true);
-                }
-                tui_surface.dirty_rows.set(y as usize, true);
-            }
-        }
-
-        tui_surface.cells[index] = cell.clone();
-        tui_surface.cell_font[index] = fonts.font_for_cell(cell);
-        tui_surface.dirty_cells.set(index, true);
-
-        let new_symbol_width = tui_surface.cells[index]
-            .symbol()
-            .chars()
-            .filter(|c| c.general_category() != GeneralCategory::Format)
-            .next()
-            .unwrap_or(' ')
-            .width()
-            .unwrap_or(1);
-        if index + 1 < index + new_symbol_width {
-            tui_surface.cells[index + 1..index + new_symbol_width].fill(NULL_CELL);
-            tui_surface.dirty_cells[index + 1..index + new_symbol_width].fill(true);
-        }
-
-        tui_surface.dirty_rows.set(y as usize, true);
     }
 }
 
@@ -1547,6 +1547,7 @@ fn shape(
 fn flush_blink(
     blinking: Blinking,
     bounds: ratatui_core::layout::Size,
+    cell_box: CellBox,
     tui_surface: &mut TuiSurface,
     rendered: &Vec<Rendered>,
     wgpu_vertices: &mut WgpuVertices,
@@ -1587,9 +1588,48 @@ fn flush_blink(
     };
 
     let mut index_offset = 0;
-    for index in cell_indexes {
-        if let Some(to_render) = rendered.get(index) {
+    for index in cell_indexes.iter() {
+        if let Some(to_render) = rendered.get(*index) {
             append_rendered(&tui_surface, to_render, &mut index_offset, wgpu_vertices);
+        }
+    }
+
+    // overlapping cells of removed or dirty images must be marked as dirty.
+    let mut index_offset = 0;
+    for img_info in tui_surface
+        .images
+        .iter()
+        .chain(tui_surface.dirty_img.iter())
+    {
+        // any row the image covers is marked as dirty.
+        let img_pos = cell_box.cell_pos(img_info.view_rect.0, img_info.view_rect.1, bounds);
+        let img_pos2 = cell_box.cell_pos(
+            img_info.view_rect.0 + img_info.view_rect.2 as i32,
+            img_info.view_rect.1 + img_info.view_rect.3 as i32,
+            bounds,
+        );
+
+        for y in img_pos.y..=img_pos2.y {
+            for x in img_pos.x..=img_pos2.x {
+                let index = (y * bounds.width + x) as usize;
+
+                if cell_indexes.contains(&index) {
+                    append_rendered_image(
+                        &ImageInfo {
+                            view_clip: (
+                                x as i32 * cell_box.width as i32,
+                                y as i32 * cell_box.height as i32,
+                                cell_box.width,
+                                cell_box.height,
+                            ),
+                            ..*img_info
+                        },
+                        &mut index_offset,
+                        wgpu_vertices,
+                    );
+                }
+            }
+            tui_surface.dirty_rows.set(y as usize, true);
         }
     }
 }
