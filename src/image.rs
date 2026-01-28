@@ -59,15 +59,15 @@ pub enum ImageFit {
     /// Fit the image to the area. It will be scaled vertically to
     /// make the image fit. The image will be clipped or the background
     /// will be visible.
-    FitVerticalStart,
+    VerticalStart,
     /// Fit the image to the area. It will be scaled vertically to
     /// make the image fit. The image will be clipped or the background
     /// will be visible.
-    FitVerticalCenter,
+    VerticalCenter,
     /// Fit the image to the area. It will be scaled vertically to
     /// make the image fit. The image will be clipped or the background
     /// will be visible.
-    FitVerticalEnd,
+    VerticalEnd,
 }
 
 /// The rendered data for one image.
@@ -159,6 +159,20 @@ pub struct ImageBuffer {
     // - target rect (x,y,w,h)
     // - transform to access the image-texture
     pub(crate) images: Vec<ImageCell>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ImageScale {
+    XY,
+    X,
+    Y,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ImageAlign {
+    Start,
+    Center,
+    End,
 }
 
 impl ImageBuffer {
@@ -261,43 +275,46 @@ impl ImageBuffer {
     /// will create the texture for the image.
     pub fn render_px(&mut self, id: &ImageHandle, rect: (i32, i32, u32, u32), arg: ImageArg) {
         let tr = if let Some(fit) = arg.fit {
+            use ImageAlign::*;
+            use ImageScale::*;
+
             match fit {
                 ImageFit::Fill => Transform::default(),
                 ImageFit::FitStart => {
                     let img = self.image_size(id).expect("img1");
-                    self.scale_to_fit(img, (rect.2, rect.3), 0, 0)
+                    self.scale_to_fit(img, (rect.2, rect.3), XY, Start)
                 }
                 ImageFit::FitCenter => {
                     let img = self.image_size(id).expect("img1");
-                    self.scale_to_fit(img, (rect.2, rect.3), 0, 1)
+                    self.scale_to_fit(img, (rect.2, rect.3), XY, Center)
                 }
                 ImageFit::FitEnd => {
                     let img = self.image_size(id).expect("img1");
-                    self.scale_to_fit(img, (rect.2, rect.3), 0, 2)
+                    self.scale_to_fit(img, (rect.2, rect.3), XY, End)
                 }
                 ImageFit::HorizontalStart => {
                     let img = self.image_size(id).expect("img1");
-                    self.scale_to_fit(img, (rect.2, rect.3), 1, 0)
+                    self.scale_to_fit(img, (rect.2, rect.3), X, Start)
                 }
                 ImageFit::HorizontalCenter => {
                     let img = self.image_size(id).expect("img1");
-                    self.scale_to_fit(img, (rect.2, rect.3), 1, 1)
+                    self.scale_to_fit(img, (rect.2, rect.3), X, Center)
                 }
                 ImageFit::HorizontalEnd => {
                     let img = self.image_size(id).expect("img1");
-                    self.scale_to_fit(img, (rect.2, rect.3), 1, 2)
+                    self.scale_to_fit(img, (rect.2, rect.3), X, End)
                 }
-                ImageFit::FitVerticalStart => {
+                ImageFit::VerticalStart => {
                     let img = self.image_size(id).expect("img1");
-                    self.scale_to_fit(img, (rect.2, rect.3), 2, 0)
+                    self.scale_to_fit(img, (rect.2, rect.3), Y, Start)
                 }
-                ImageFit::FitVerticalCenter => {
+                ImageFit::VerticalCenter => {
                     let img = self.image_size(id).expect("img1");
-                    self.scale_to_fit(img, (rect.2, rect.3), 2, 1)
+                    self.scale_to_fit(img, (rect.2, rect.3), Y, Center)
                 }
-                ImageFit::FitVerticalEnd => {
+                ImageFit::VerticalEnd => {
                     let img = self.image_size(id).expect("img1");
-                    self.scale_to_fit(img, (rect.2, rect.3), 2, 2)
+                    self.scale_to_fit(img, (rect.2, rect.3), Y, End)
                 }
             }
         } else if let Some(tr) = arg.tr {
@@ -328,44 +345,47 @@ impl ImageBuffer {
         &self,
         img: (u32, u32),
         view: (u32, u32),
-        mut scale: u8,
-        align: u8,
+        mut scale: ImageScale,
+        align: ImageAlign,
     ) -> Transform {
+        use ImageAlign::*;
+        use ImageScale::*;
+
         let (view_width, view_height) = (view.0 as f32, view.1 as f32);
         let (img_width, img_height) = (img.0 as f32, img.1 as f32);
 
-        if scale == 0 {
+        if scale == XY {
             if view_width * img_height / view_height > img_width {
                 // horizontally
-                scale = 1;
+                scale = Y;
             } else {
                 // vertically
-                scale = 2;
+                scale = X;
             }
         }
 
-        if scale == 1 {
+        if scale == Y {
             let w_scale = (view_width * img_height) / (view_height * img_width);
             let h_scale = 1.0f32;
-            if align == 0 {
+            if align == Start {
                 Transform::scale(w_scale, h_scale)
-            } else if align == 1 {
+            } else if align == Center {
                 Transform::scale(w_scale, h_scale)
                     .then_translate(Vector2D::new((1.0 - w_scale) / 2.0, 0.0))
-            } else if align == 2 {
+            } else if align == End {
                 Transform::scale(w_scale, h_scale).then_translate(Vector2D::new(1.0 - w_scale, 0.0))
             } else {
                 unreachable!()
             }
-        } else if scale == 2 {
+        } else if scale == X {
             let w_scale = 1.0f32;
             let h_scale = (view_height * img_width) / (view_width * img_height);
-            if align == 0 {
+            if align == Start {
                 Transform::scale(w_scale, h_scale)
-            } else if align == 1 {
+            } else if align == Center {
                 Transform::scale(w_scale, h_scale)
                     .then_translate(Vector2D::new(0.0, (1.0 - h_scale) / 2.0))
-            } else if align == 2 {
+            } else if align == End {
                 Transform::scale(w_scale, h_scale).then_translate(Vector2D::new(0.0, 1.0 - h_scale))
             } else {
                 unreachable!()
