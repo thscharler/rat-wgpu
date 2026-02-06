@@ -42,11 +42,6 @@ impl CellBox {
         let cy = (y / self.height as i32).clamp(0, bounds.height.saturating_sub(1) as i32) as u16;
         ratatui_core::layout::Position::new(cx, cy)
     }
-
-    /// Cell-size to pixel.
-    pub(crate) fn px_size(&self, width: u16, height: u16) -> (u32, u32) {
-        (width as u32 * self.width, height as u32 * self.height)
-    }
 }
 
 #[derive(Debug)]

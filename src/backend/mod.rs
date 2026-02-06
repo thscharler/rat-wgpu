@@ -1,16 +1,14 @@
 use crate::backend::surface::RenderSurface;
 use crate::colors::{ColorTable, Rgb};
 use crate::cursor::CursorStyle;
-use crate::image::ImageFrame;
+use crate::image::{ImageFrame, ImageHandle};
 use crate::text_atlas::{Atlas, CacheRect};
 use bitvec::vec::BitVec;
 use raqote::Transform;
 use ratatui_core::buffer::Cell;
 use ratatui_core::style::Modifier;
 use rustybuzz::ttf_parser::GlyphId;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::collections::{HashMap, HashSet};
 use wgpu::{
     BindGroup, BindGroupLayout, Buffer, Device, Queue, RenderPipeline, Sampler,
     SurfaceConfiguration, Texture, TextureView,
@@ -26,8 +24,6 @@ const NULL_CELL: Cell = {
     c.skip = true;
     c
 };
-
-const ONE_CELL: Cell = Cell::new(" ");
 
 #[derive(Debug)]
 struct RenderInfo {
@@ -48,7 +44,6 @@ struct ImageInfo {
     image_id: usize,
     view_rect: (i32, i32, u32, u32),
     view_clip: (i32, i32, u32, u32),
-    img_size: (u32, u32),
     below_text: bool,
     uv_transform: Transform,
 }
@@ -181,13 +176,11 @@ struct WgpuAtlas {
 
 struct WgpuImage {
     texture: TextureView,
-    width: u32,
-    height: u32,
-    dropped: Arc<AtomicBool>,
 }
 
 struct WgpuImages {
     img_id: usize,
+    handles: HashSet<ImageHandle>,
     img: HashMap<usize, WgpuImage>,
 }
 

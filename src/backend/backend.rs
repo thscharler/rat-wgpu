@@ -24,7 +24,6 @@ use rustybuzz::ttf_parser::GlyphId;
 use rustybuzz::{GlyphBuffer, UnicodeBuffer, shape_with_plan};
 use std::mem;
 use std::num::NonZeroU64;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use unicode_bidi::ParagraphBidiInfo;
 use unicode_properties::{
@@ -87,7 +86,6 @@ impl<'s> Backend for WgpuBackend<'_, 's> {
         draw_tui(
             bounds,
             &self.fonts,
-            &self.wgpu_images,
             &mut content,
             &mut self.tui_surface,
             &mut self.rendered,
@@ -572,24 +570,18 @@ impl<'f, 's> WgpuBackend<'f, 's> {
 
         let id = self.wgpu_images.img_id;
         self.wgpu_images.img_id += 1;
+        let handle = ImageHandle::new(id);
 
-        let dropped = Arc::new(AtomicBool::new(false));
-
-        self.wgpu_images.img.insert(
-            id,
-            WgpuImage {
-                texture: img_view,
-                width,
-                height,
-                dropped: dropped.clone(),
-            },
-        );
+        self.wgpu_images.handles.insert(handle.clone());
+        self.wgpu_images
+            .img
+            .insert(id, WgpuImage { texture: img_view });
 
         let image_buffer = self.tui_surface.image_frame.buffer();
         let mut image_buffer = image_buffer.lock().expect("lock");
         image_buffer.image_size.insert(id, (width, height));
 
-        ImageHandle { id, dropped }
+        handle
     }
 
     /// Returns a BufferView for the current rendered result.
@@ -718,16 +710,17 @@ fn rebuild_surface(
 // Remove unreferenced images.
 fn drop_images(tui_surface: &mut TuiSurface, wgpu_images: &mut WgpuImages) {
     let mut dropped = Vec::new();
-    for (img_id, img) in &wgpu_images.img {
-        if img.dropped.load(Ordering::Acquire) {
-            dropped.push(*img_id);
+    for img_id in &wgpu_images.handles {
+        if img_id.is_last() {
+            dropped.push(img_id.clone());
         }
     }
     let image_buffer = tui_surface.image_frame.buffer();
     let mut image_buffer = image_buffer.lock().expect("lock");
     for img_id in dropped {
-        wgpu_images.img.remove(&img_id);
-        image_buffer.image_size.remove(&img_id);
+        wgpu_images.handles.remove(&img_id);
+        wgpu_images.img.remove(&img_id.id());
+        image_buffer.image_size.remove(&img_id.id());
     }
 }
 
@@ -946,7 +939,6 @@ fn render_img(
 fn draw_tui(
     bounds: ratatui_core::layout::Size,
     fonts: &Fonts,
-    wgpu_images: &WgpuImages,
     content: &mut dyn Iterator<Item = (u16, u16, &'_ Cell)>,
     tui_surface: &mut TuiSurface,
     rendered: &mut Vec<Rendered>,
@@ -1040,10 +1032,8 @@ fn draw_tui(
             tr,
         } in image_buffer.images.iter()
         {
-            let img = wgpu_images.img.get(image_id).expect("image");
             let img_info = ImageInfo {
                 image_id: *image_id,
-                img_size: (img.width, img.height),
                 view_rect: *view_rect,
                 view_clip: *view_clip,
                 below_text: *below_text,
@@ -1243,7 +1233,7 @@ fn flush_tui(
                         .unwrap_or(' ')
                         .width()
                         .unwrap_or(1);
-                    current_cell_idx = (current_cell_idx + symbol_width as i32);
+                    current_cell_idx = current_cell_idx + symbol_width as i32;
                 }
 
                 if start_cell_idx.is_none() {

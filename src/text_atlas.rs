@@ -98,6 +98,7 @@ impl Atlas {
         c.color = colored;
     }
 
+    #[allow(unused_variables)]
     pub(crate) fn get(&mut self, key: &Key, width: u32, height: u32) -> Entry {
         #[cfg(debug_assertions)]
         if self.entry_height != height {

@@ -575,6 +575,7 @@ where
             },
             wgpu_images: WgpuImages {
                 img_id: 1,
+                handles: Default::default(),
                 img: Default::default(),
             },
             wgpu_post_process: Box::new(post_process),

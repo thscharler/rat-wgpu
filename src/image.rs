@@ -3,28 +3,28 @@ use crate::util::intersect;
 use euclid::Vector2D;
 use raqote::Transform;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// Handle for any added image.
 ///
 /// When the handle is dropped, the backing texture will be dropped after
 /// the next flush().
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct ImageHandle {
-    pub(crate) id: usize,
-    pub(crate) dropped: Arc<AtomicBool>,
+    id: Arc<usize>,
 }
 
 impl ImageHandle {
-    pub fn id(&self) -> usize {
-        self.id
+    pub(crate) fn new(id: usize) -> Self {
+        Self { id: Arc::new(id) }
     }
-}
 
-impl Drop for ImageHandle {
-    fn drop(&mut self) {
-        self.dropped.store(true, Ordering::Release)
+    pub(crate) fn id(&self) -> usize {
+        *self.id
+    }
+
+    pub(crate) fn is_last(&self) -> bool {
+        Arc::strong_count(&self.id) == 1
     }
 }
 
