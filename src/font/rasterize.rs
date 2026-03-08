@@ -520,6 +520,7 @@ const LUT_4: [u8; 16] = [
 mod tests {
     use crate::font::rasterize::{LUT_2, LUT_4, extract_bw_image, extract_color_image};
     use crate::text_atlas::{CacheRect, Entry};
+    #[cfg(feature = "png")]
     use image::{GenericImageView, load_from_memory};
     use rustybuzz::ttf_parser::RasterGlyphImage;
     use rustybuzz::ttf_parser::RasterImageFormat;
