@@ -118,24 +118,32 @@ impl<'s> Backend for WgpuBackend<'_, 's> {
         let pos = position.into();
 
         // old cursor
-        self.tui_surface
-            .dirty_rows
-            .set(self.tui_surface.cursor.1 as usize, true);
-        self.tui_surface.dirty_cells.set(
-            self.tui_surface.cursor.1 as usize * bounds.width as usize
-                + self.tui_surface.cursor.0 as usize,
-            true,
+        if !self.tui_surface.dirty_rows.is_empty() {
+            self.tui_surface
+                .dirty_rows
+                .set(self.tui_surface.cursor.1 as usize, true);
+            self.tui_surface.dirty_cells.set(
+                self.tui_surface.cursor.1 as usize * bounds.width as usize
+                    + self.tui_surface.cursor.0 as usize,
+                true,
+            );
+        }
+
+        self.tui_surface.cursor = (
+            pos.x.min(bounds.width.saturating_sub(1)),
+            pos.y.min(bounds.height.saturating_sub(1)),
         );
 
-        self.tui_surface.cursor = (pos.x.min(bounds.width - 1), pos.y.min(bounds.height - 1));
-        self.tui_surface
-            .dirty_rows
-            .set(self.tui_surface.cursor.1 as usize, true);
-        self.tui_surface.dirty_cells.set(
-            self.tui_surface.cursor.1 as usize * bounds.width as usize
-                + self.tui_surface.cursor.0 as usize,
-            true,
-        );
+        if !self.tui_surface.dirty_rows.is_empty() {
+            self.tui_surface
+                .dirty_rows
+                .set(self.tui_surface.cursor.1 as usize, true);
+            self.tui_surface.dirty_cells.set(
+                self.tui_surface.cursor.1 as usize * bounds.width as usize
+                    + self.tui_surface.cursor.0 as usize,
+                true,
+            );
+        }
 
         Ok(())
     }
