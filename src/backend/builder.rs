@@ -329,10 +329,12 @@ where
         target: impl Into<SurfaceTarget<'s>>,
     ) -> Result<WgpuBackend<'a, 's>, Error> {
         let instance = self.instance.get_or_insert_with(|| {
-            Instance::new(&InstanceDescriptor {
+            Instance::new(InstanceDescriptor {
                 backends: self.backends,
                 flags: InstanceFlags::default(),
-                ..Default::default()
+                memory_budget_thresholds: Default::default(),
+                backend_options: Default::default(),
+                display: None,
             })
         });
 
@@ -374,10 +376,12 @@ where
         mut surface: RenderSurface<'s>,
     ) -> Result<WgpuBackend<'a, 's>, Error> {
         let instance = self.instance.get_or_insert_with(|| {
-            Instance::new(&InstanceDescriptor {
+            Instance::new(InstanceDescriptor {
                 backends: self.backends,
                 flags: InstanceFlags::default(),
-                ..Default::default()
+                memory_budget_thresholds: Default::default(),
+                backend_options: Default::default(),
+                display: None,
             })
         });
 
@@ -719,7 +723,7 @@ fn build_img_compositor(device: &Device, screen_size: &Buffer) -> ImgPipeline {
 
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("Img Compositor Layout"),
-        bind_group_layouts: &[&vertex_shader_layout, &fragment_shader_layout],
+        bind_group_layouts: &[Some(&vertex_shader_layout), Some(&fragment_shader_layout)],
         immediate_size: 0,
     });
 
@@ -730,11 +734,11 @@ fn build_img_compositor(device: &Device, screen_size: &Buffer) -> ImgPipeline {
             module: &shader,
             entry_point: Some("vs_main"),
             compilation_options: PipelineCompilationOptions::default(),
-            buffers: &[VertexBufferLayout {
+            buffers: &[Some(VertexBufferLayout {
                 array_stride: size_of::<ImgVertexMember>() as u64,
                 step_mode: VertexStepMode::Vertex,
                 attributes: &vertex_attr_array![0 => Float32x2, 1 => Float32x2],
-            }],
+            })],
         },
         primitive: PrimitiveState {
             topology: PrimitiveTopology::TriangleList,
@@ -791,7 +795,7 @@ fn build_text_bg_compositor(device: &Device, screen_size: &Buffer) -> TextCacheB
 
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("Text Bg Compositor Layout"),
-        bind_group_layouts: &[&vertex_shader_layout],
+        bind_group_layouts: &[Some(&vertex_shader_layout)],
         immediate_size: 0,
     });
 
@@ -802,11 +806,11 @@ fn build_text_bg_compositor(device: &Device, screen_size: &Buffer) -> TextCacheB
             module: &shader,
             entry_point: Some("vs_main"),
             compilation_options: PipelineCompilationOptions::default(),
-            buffers: &[VertexBufferLayout {
+            buffers: &[Some(VertexBufferLayout {
                 array_stride: size_of::<TextBgVertexMember>() as u64,
                 step_mode: VertexStepMode::Vertex,
                 attributes: &vertex_attr_array![0 => Float32x2, 1 => Uint32],
-            }],
+            })],
         },
         primitive: PrimitiveState {
             topology: PrimitiveTopology::TriangleList,
@@ -919,7 +923,7 @@ fn build_text_fg_compositor(
 
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("Text Compositor Layout"),
-        bind_group_layouts: &[&vertex_shader_layout, &fragment_shader_layout],
+        bind_group_layouts: &[Some(&vertex_shader_layout), Some(&fragment_shader_layout)],
         immediate_size: 0,
     });
 
@@ -930,11 +934,11 @@ fn build_text_fg_compositor(
             module: &shader,
             entry_point: Some("vs_main"),
             compilation_options: PipelineCompilationOptions::default(),
-            buffers: &[VertexBufferLayout {
+            buffers: &[Some(VertexBufferLayout {
                 array_stride: size_of::<TextVertexMember>() as u64,
                 step_mode: VertexStepMode::Vertex,
                 attributes: &vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32, 3 => Uint32, 4 => Uint32, 5 => Uint32, 6 => Uint32, 7 => Uint32, 8 => Uint32 ],
-            }],
+            })],
         },
         primitive: PrimitiveState {
             topology: PrimitiveTopology::TriangleList,

@@ -5,7 +5,7 @@ use crate::image::{ImageFrame, ImageHandle};
 use crate::text_atlas::{Atlas, CacheRect};
 use bitvec::vec::BitVec;
 use raqote::Transform;
-use ratatui_core::buffer::Cell;
+use ratatui_core::buffer::{Cell, CellDiffOption};
 use ratatui_core::style::Modifier;
 use rustybuzz::ttf_parser::GlyphId;
 use std::collections::{HashMap, HashSet};
@@ -21,7 +21,7 @@ mod surface;
 
 const NULL_CELL: Cell = {
     let mut c = Cell::new("");
-    c.skip = true;
+    c.diff_option = CellDiffOption::Skip;
     c
 };
 

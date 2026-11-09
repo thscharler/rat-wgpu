@@ -18,7 +18,7 @@ use crate::util::clip_uv;
 use crate::{CellBox, Error};
 use bitvec::slice::BitSlice;
 use ratatui_core::backend::{Backend, ClearType, WindowSize};
-use ratatui_core::buffer::Cell;
+use ratatui_core::buffer::{Cell, CellDiffOption};
 use ratatui_core::style::Modifier;
 use rustybuzz::ttf_parser::GlyphId;
 use rustybuzz::{GlyphBuffer, UnicodeBuffer, shape_with_plan};
@@ -640,7 +640,10 @@ impl<'f, 's> WgpuBackend<'f, 's> {
             Err(e) => return Err(Error::BufferAsyncError(e.to_string())),
         };
 
-        Ok(buffer.get_mapped_range())
+        match buffer.get_mapped_range() {
+            Ok(v) => Ok(v),
+            Err(e) => Err(Error::BufferAsyncError(e.to_string())),
+        }
     }
 
     /// Releases the mapping of the headless buffer.
@@ -872,7 +875,7 @@ fn render(
 
     base.queue.submit(Some(encoder.finish()));
 
-    texture.present();
+    texture.present(&base.queue);
 }
 
 fn render_img(
@@ -1144,7 +1147,7 @@ fn flush_tui(
         tmp_rowbuf_to_cell.clear();
 
         for (cell_idx, cell) in row_cells.iter().enumerate() {
-            if !cell.skip {
+            if !matches!(cell.diff_option, CellDiffOption::Skip) {
                 tmp_rowbuf.push_str(cell.symbol());
                 tmp_rowbuf_to_cell.resize(
                     tmp_rowbuf_to_cell.len() + cell.symbol().len(),

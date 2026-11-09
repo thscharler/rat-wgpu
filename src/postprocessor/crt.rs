@@ -668,7 +668,7 @@ fn build_blur(device: &Device) -> (RenderPipeline, BindGroupLayout) {
 
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("Blur Layout"),
-        bind_group_layouts: &[&fragment_shader_layout],
+        bind_group_layouts: &[Some(&fragment_shader_layout)],
         immediate_size: 0,
     });
 
@@ -738,10 +738,10 @@ fn build_crt(
     let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: Some("CRT Layout"),
         bind_group_layouts: &[
-            texture_layout,
-            texture_layout,
-            texture_layout,
-            &uniforms_layout,
+            Some(texture_layout),
+            Some(texture_layout),
+            Some(texture_layout),
+            Some(&uniforms_layout),
         ],
         immediate_size: 0,
     });

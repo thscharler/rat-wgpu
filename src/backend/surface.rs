@@ -1,5 +1,8 @@
-use log::error;
-use wgpu::{Adapter, Device, Extent3d, Surface, SurfaceConfiguration, SurfaceTexture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor};
+use wgpu::{
+    Adapter, CurrentSurfaceTexture, Device, Extent3d, Queue, Surface, SurfaceConfiguration,
+    SurfaceTexture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
+    TextureViewDescriptor,
+};
 
 pub(crate) enum RenderTarget {
     Surface {
@@ -33,9 +36,9 @@ impl RenderTarget {
         }
     }
 
-    pub(crate) fn present(self) {
+    pub(crate) fn present(self, queue: &Queue) {
         match self {
-            RenderTarget::Surface { texture, .. } => texture.present(),
+            RenderTarget::Surface { texture, .. } => queue.present(texture),
             RenderTarget::Headless { .. } => {
                 // noop
             }
@@ -75,7 +78,7 @@ impl<'s> RenderSurface<'s> {
             RenderSurface::Surface(surface) => Some(surface),
             RenderSurface::Headless(_) => None,
         }
-    } 
+    }
 
     pub(crate) fn get_default_config(
         &self,
@@ -88,6 +91,7 @@ impl<'s> RenderSurface<'s> {
             RenderSurface::Headless(Headless { format, .. }) => Some(SurfaceConfiguration {
                 usage: TextureUsages::RENDER_ATTACHMENT,
                 format: *format,
+                color_space: Default::default(),
                 width,
                 height,
                 present_mode: wgpu::PresentMode::Immediate,
@@ -143,11 +147,9 @@ impl<'s> RenderSurface<'s> {
         match self {
             RenderSurface::Surface(surface) => {
                 let output = match surface.get_current_texture() {
-                    Ok(output) => output,
-                    Err(err) => {
-                        error!("{err}");
-                        return None;
-                    }
+                    CurrentSurfaceTexture::Success(v) => v,
+                    CurrentSurfaceTexture::Suboptimal(v) => v,
+                    _ => return None,
                 };
 
                 let view = output
