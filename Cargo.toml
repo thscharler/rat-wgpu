@@ -27,11 +27,11 @@ rustybuzz = "0.20"
 ratatui-core = "0.1"
 log = "0.4"
 append-only-vec = "0.1"
-fontdb = "0.23"
-wgpu = "28.0"
+fontdb = "0.24.0"
+wgpu = "30.0"
 bytemuck = { version = "1.23", features = ["derive"] }
 raqote = { version = "0.8", default-features = false }
-evictor = { version = "0.5", default-features = false }
+evictor = { version = "0.7", default-features = false }
 euclid = "0.22"
 bitvec = { version = "1.0", default-features = false, features = ["std"] }
 unicode-bidi = "0.3"
@@ -44,7 +44,7 @@ crossterm = { version = "0.29", optional = true }
 [dev-dependencies]
 image = { version = "0.25", default-features = false, features = ["png"] }
 ratatui-widgets = { version = "0.3", default-features = false }
-serial_test = "3.2"
+serial_test = "4.0"
 futures-lite = "2.6"
 anyhow = "1.0"
 env_logger = "0.11"
