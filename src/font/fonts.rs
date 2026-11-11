@@ -6,6 +6,7 @@ use ratatui_core::style::Modifier;
 
 /// A collection of fonts to use for rendering.
 /// Supports font fallback.
+#[derive(Debug)]
 pub struct Fonts {
     width_px: u32,
     height_px: u32,
@@ -255,43 +256,41 @@ impl Fonts {
             .expect("font")
     }
 
-    pub(crate) fn font_for_cell(&'_ self, cell: &Cell) -> fontdb::ID {
+    pub(crate) fn default_font_for_cell(&self) -> fontdb::ID {
+        self.select_font(" ", self.regular.iter().chain(self.fallback.iter()))
+    }
+
+    pub(crate) fn font_for_cell(&self, cell: &Cell) -> fontdb::ID {
         if cell.modifier.contains(Modifier::BOLD | Modifier::ITALIC) {
             self.select_font(
                 cell.symbol(),
                 self.bold_italic
                     .iter()
-                    .map(|f| f)
-                    .chain(self.italic.iter().map(|f| f))
-                    .chain(self.bold.iter().map(|f| f))
-                    .chain(self.regular.iter().map(|f| f))
-                    .chain(self.fallback.iter().map(|f| f)),
+                    .chain(self.italic.iter())
+                    .chain(self.bold.iter())
+                    .chain(self.regular.iter())
+                    .chain(self.fallback.iter()),
             )
         } else if cell.modifier.contains(Modifier::BOLD) {
             self.select_font(
                 cell.symbol(),
                 self.bold
                     .iter()
-                    .map(|f| f)
-                    .chain(self.regular.iter().map(|f| f))
-                    .chain(self.fallback.iter().map(|f| f)),
+                    .chain(self.regular.iter())
+                    .chain(self.fallback.iter()),
             )
         } else if cell.modifier.contains(Modifier::ITALIC) {
             self.select_font(
                 cell.symbol(),
                 self.italic
                     .iter()
-                    .map(|f| f)
-                    .chain(self.regular.iter().map(|f| f))
-                    .chain(self.fallback.iter().map(|f| f)),
+                    .chain(self.regular.iter())
+                    .chain(self.fallback.iter()),
             )
         } else {
             self.select_font(
                 cell.symbol(),
-                self.regular
-                    .iter()
-                    .map(|f| f)
-                    .chain(self.fallback.iter().map(|f| f)),
+                self.regular.iter().chain(self.fallback.iter()),
             )
         }
     }

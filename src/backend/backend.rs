@@ -181,7 +181,7 @@ impl<'s> Backend for WgpuBackend<'s> {
             }
             ClearType::BeforeCursor => {
                 self.tui_surface.cells[..idx].fill(Cell::EMPTY);
-                self.tui_surface.cell_font[..idx].fill(fontdb::ID::default());
+                self.tui_surface.cell_font[..idx].fill(self.fonts.default_font_for_cell());
                 self.tui_surface.cell_remap[..idx].fill(0);
                 self.tui_surface.dirty_rows[..=self.tui_surface.cursor.1 as usize].fill(true);
                 self.tui_surface.dirty_cells[..idx].fill(true);
@@ -193,7 +193,7 @@ impl<'s> Backend for WgpuBackend<'s> {
                 self.tui_surface.cells[line_start..line_start + bounds.width as usize]
                     .fill(Cell::EMPTY);
                 self.tui_surface.cell_font[line_start..line_start + bounds.width as usize]
-                    .fill(fontdb::ID::default());
+                    .fill(self.fonts.default_font_for_cell());
                 self.tui_surface.cell_remap[line_start..line_start + bounds.width as usize].fill(0);
                 self.tui_surface
                     .dirty_rows
@@ -209,7 +209,8 @@ impl<'s> Backend for WgpuBackend<'s> {
             ClearType::UntilNewLine => {
                 let remain = (bounds.width - self.tui_surface.cursor.0) as usize;
                 self.tui_surface.cells[idx..idx + remain].fill(Cell::EMPTY);
-                self.tui_surface.cell_font[idx..idx + remain].fill(fontdb::ID::default());
+                self.tui_surface.cell_font[idx..idx + remain]
+                    .fill(self.fonts.default_font_for_cell());
                 self.tui_surface.cell_remap[idx..idx + remain].fill(0);
                 self.tui_surface
                     .dirty_rows
@@ -960,7 +961,7 @@ fn draw_tui(
         .resize(bounds.height as usize * bounds.width as usize, Cell::EMPTY);
     tui_surface.cell_font.resize(
         bounds.height as usize * bounds.width as usize,
-        fontdb::ID::default(),
+        fonts.default_font_for_cell(),
     );
     tui_surface
         .cell_remap
