@@ -25,6 +25,8 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
+// application for winit.
+// split because of Terminal::draw()
 pub struct MinimalWinit {
     ctx: Option<MinimalContext>,
     state: MinimalState,
@@ -37,6 +39,7 @@ pub struct MinimalContext {
     font_size: u32,
 }
 
+// Actual application state.
 pub struct MinimalState {
     theme: SalsaTheme,
     menu: MenuLineState,
@@ -74,12 +77,14 @@ fn main() -> anyhow::Result<()> {
 
 impl ApplicationHandler for MinimalWinit {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        // window
         let mut attr = WindowAttributes::default();
         attr.visible = false;
         let window = Arc::new(event_loop.create_window(attr).unwrap());
 
         let size = window.inner_size();
 
+        // async because wgpu
         let terminal = Terminal::new(
             futures_lite::future::block_on(
                 Builder::new()
