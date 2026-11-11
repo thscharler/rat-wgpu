@@ -3,7 +3,7 @@ use crate::WgpuBackend;
 mod convert_crossterm;
 mod convert_winit;
 
-pub use convert_crossterm::{ConvertCrossterm, ConvertCrosstermEx};
+pub use convert_crossterm::{ConvertCrossterm, ConvertCrosstermBase, ConvertCrosstermEx};
 pub use convert_winit::ConvertWinit;
 
 ///

@@ -2,6 +2,13 @@ use crate::WgpuBackend;
 use crate::events::{CompositeWinitEvent, ConvertEvent, WinitEventState};
 
 /// Convert winit-events to crossterm-events.
+#[derive(Debug, Default)]
+pub struct ConvertCrosstermBase {
+    state: WinitEventState,
+}
+
+/// Convert winit-events to some application event-type
+/// with crossterm-events as in between type.
 ///
 /// Unmappable events are dropped.
 ///
@@ -44,9 +51,10 @@ pub struct ConvertCrossterm {
     state: WinitEventState,
 }
 
-/// Convert winit-events to crossterm-events.
-///
-/// Any unconvertible events will be sent as a [CompositeWinitEvent]
+/// Convert winit-events to some application event-type
+/// with crossterm-events as in between type.
+/// Any event not mappable to crossterm will be
+/// converted to the application event-type as a [CompositeWinitEvent].
 ///
 /// __Requires__
 ///
@@ -56,6 +64,34 @@ pub struct ConvertCrossterm {
 #[derive(Debug, Default)]
 pub struct ConvertCrosstermEx {
     state: WinitEventState,
+}
+
+impl ConvertCrosstermBase {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl ConvertEvent<crossterm::event::Event> for ConvertCrosstermBase {
+    fn set_window_size(
+        &mut self,
+        window_size: ratatui_core::backend::WindowSize,
+        backend: &WgpuBackend<'_>,
+    ) {
+        self.state.set_window_size(window_size, backend);
+    }
+
+    fn update_state(&mut self, event: &winit::event::WindowEvent, backend: &WgpuBackend<'_>) {
+        self.state.update_state(event, backend)
+    }
+
+    fn state(&self) -> &WinitEventState {
+        &self.state
+    }
+
+    fn convert(&mut self, w_event: winit::event::WindowEvent) -> Option<crossterm::event::Event> {
+        to_crossterm_event(&mut self.state, &w_event)
+    }
 }
 
 impl ConvertCrossterm {
