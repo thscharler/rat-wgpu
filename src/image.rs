@@ -76,7 +76,6 @@ pub struct ImageCell {
     pub image_id: usize,
     pub view_rect: (i32, i32, u32, u32),
     pub view_clip: (i32, i32, u32, u32),
-    pub below_text: bool,
     pub tr: Transform,
 }
 
@@ -84,7 +83,6 @@ pub struct ImageCell {
 pub struct ImageArg {
     view_clip_area: Option<ratatui_core::layout::Rect>,
     view_clip: Option<(i32, i32, u32, u32)>,
-    below_text: bool,
     fit: Option<ImageFit>,
     tr: Option<Transform>,
 }
@@ -103,16 +101,6 @@ impl ImageArg {
     pub fn clip(mut self, rect: (i32, i32, u32, u32)) -> Self {
         self.view_clip = Some(rect);
         self.view_clip_area = None;
-        self
-    }
-
-    pub fn above_text(mut self) -> Self {
-        self.below_text = false;
-        self
-    }
-
-    pub fn below_text(mut self) -> Self {
-        self.below_text = true;
         self
     }
 
@@ -335,7 +323,6 @@ impl ImageBuffer {
             image_id: id.id(),
             view_rect: rect,
             view_clip: clip,
-            below_text: arg.below_text,
             tr,
         });
     }

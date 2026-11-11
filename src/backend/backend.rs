@@ -833,7 +833,6 @@ fn render(
                 &base.device,
                 &mut text_render_pass,
                 pipeline,
-                true,
                 images,
                 &img_indices,
                 &img_vertices,
@@ -851,19 +850,6 @@ fn render(
                 0..(vertices.text_vertices.len() as u32 / 4) * 6,
                 0,
                 0..1,
-            );
-        }
-
-        if !vertices.img_vertices.is_empty() {
-            render_img(
-                &base.device,
-                &mut text_render_pass,
-                pipeline,
-                false,
-                images,
-                &img_indices,
-                &img_vertices,
-                &vertices.img_render,
             );
         }
     }
@@ -892,7 +878,6 @@ fn render_img(
     device: &Device,
     text_render_pass: &mut RenderPass,
     pipeline: &WgpuPipeline,
-    below_text: bool,
     images: &WgpuImages,
     img_indices: &Buffer,
     img_vertices: &Buffer,
@@ -905,10 +890,6 @@ fn render_img(
     text_render_pass.set_vertex_buffer(0, img_vertices.slice(..));
     for (n, img_info) in img_render.iter().enumerate() {
         let n = n as u32;
-
-        if img_info.below_text != below_text {
-            continue;
-        }
 
         let uv_transform_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Image UV-Transform Uniforms Buffer"),
@@ -1042,7 +1023,6 @@ fn draw_tui(
             image_id,
             view_rect,
             view_clip,
-            below_text,
             tr,
         } in image_buffer.images.iter()
         {
@@ -1050,7 +1030,6 @@ fn draw_tui(
                 image_id: *image_id,
                 view_rect: *view_rect,
                 view_clip: *view_clip,
-                below_text: *below_text,
                 uv_transform: *tr,
             };
 
@@ -1063,10 +1042,7 @@ fn draw_tui(
                 .position(|test| test.image_id == *image_id && test.view_rect == *view_rect)
             {
                 let test = tui_surface.images[pos];
-
-                if test.below_text != img_info.below_text
-                    || test.uv_transform != img_info.uv_transform
-                {
+                if test.uv_transform != img_info.uv_transform {
                     // existing image differs in render parameters.
                     tui_surface.dirty_img.push(img_info);
                 } else {

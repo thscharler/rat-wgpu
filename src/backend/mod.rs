@@ -44,7 +44,6 @@ struct ImageInfo {
     image_id: usize,
     view_rect: (i32, i32, u32, u32),
     view_clip: (i32, i32, u32, u32),
-    below_text: bool,
     uv_transform: Transform,
 }
 
