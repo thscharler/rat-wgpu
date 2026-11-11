@@ -13,7 +13,7 @@ use crate::image::{ImageBuffer, ImageFrame};
 use crate::postprocessor::PostProcessorBuilder;
 use crate::postprocessor::default::DefaultPostProcessorBuilder;
 use crate::text_atlas::Atlas;
-use log::info;
+use log::{debug, info};
 use ratatui_core::style::Color;
 use rustybuzz::UnicodeBuffer;
 use std::num::NonZeroU64;
@@ -37,7 +37,7 @@ const CACHE_HEIGHT: u32 = 1200;
 
 pub struct Builder<P = DefaultPostProcessorBuilder> {
     postprocessor: P,
-    fonts: Option<Fonts>,
+    fonts: Fonts,
     backends: Backends,
     instance: Option<Instance>,
     limits: Option<Limits>,
@@ -90,17 +90,12 @@ impl<P> Builder<P>
 where
     P: PostProcessorBuilder + Default,
 {
+    /// New builder with some postprocessing after the rendering.
     pub fn new_with_postprocessor(builder: P) -> Self {
         Self {
             postprocessor: builder,
             ..Default::default()
         }
-    }
-
-    ///
-    pub fn with_fallback_fonts(mut self, fonts: Fonts) -> Self {
-        self.fonts = Some(fonts);
-        self
     }
 
     /// Use one of the given Backends.
@@ -117,30 +112,11 @@ where
         self
     }
 
-    fn init_fallback_fonts(&mut self) {
-        if self.fonts.is_some() {
-            return;
-        }
-
-        let mut fallback = Vec::new();
-        if let Some(f) = fallback_font() {
-            fallback.push(f);
-        }
-        if let Some(f) = fallback_symbol_font() {
-            fallback.push(f);
-        }
-        if let Some(f) = fallback_emoji_font() {
-            fallback.push(f)
-        }
-
-        self.fonts = Some(Fonts::new_vec(fallback, 22));
-    }
-
     /// Use the specified font size in pixels. Defaults to 24px.
     ///
-    /// __Note__
+    /// __Panic__
     ///
-    /// Size 0 is ignored.
+    /// Size 0 panics.
     ///
     /// __Note__
     ///
@@ -148,70 +124,38 @@ where
     /// initialize a builtin list of fallback fonts.
     #[must_use]
     pub fn with_font_size_px(mut self, size: u32) -> Self {
-        if size > 0 {
-            self.init_fallback_fonts();
-            self.fonts.as_mut().expect("fonts").set_height_px(size);
+        self.fonts.set_height_px(size);
+        self
+    }
+
+    /// Add one font for rendering.
+    /// You can add multiple fonts, especially all the fonts of a font-family.
+    pub fn with_font(mut self, font: Font) -> Self {
+        self.fonts.add_font(font);
+        self
+    }
+
+    /// Add all the given fonts for rendering.
+    pub fn with_fonts<I: IntoIterator<Item = Font>>(mut self, fonts: I) -> Self {
+        for font in fonts {
+            self.fonts.add_font(font);
         }
         self
     }
 
-    /// Use the specified list of fonts for rendering. You may call this
-    /// multiple times to extend the list of fallback fonts. Note that this will
-    /// automatically organize fonts by relative width in order to optimize
-    /// fallback rendering quality. The ordering of already provided fonts will
-    /// remain unchanged.
-    ///
-    /// See also [`Fonts::add_fonts`].
-    pub fn with_fonts<I: IntoIterator<Item = Font>>(mut self, fonts: I) -> Self {
-        self.init_fallback_fonts();
-        self.fonts.as_mut().expect("fonts").add_fonts(fonts);
+    /// Add a fallback font.
+    /// You can add multiple fallbacks.
+    pub fn with_fallback_font(mut self, font: Font) -> Self {
+        self.fonts.add_fallback(font);
         self
     }
 
-    /// Use the specified list of regular fonts for rendering. You may call this
-    /// multiple times to extend the list of fallback fonts.
-    ///
-    /// See also [`Fonts::add_regular_fonts`].
-    #[must_use]
-    pub fn with_regular_fonts<I: IntoIterator<Item = Font>>(mut self, fonts: I) -> Self {
-        self.init_fallback_fonts();
-        self.fonts.as_mut().expect("fonts").add_regular_fonts(fonts);
-        self
-    }
-
-    /// Use the specified list of bold fonts for rendering. You may call this
-    /// multiple times to extend the list of fallback fonts.
-    ///
-    /// See also [`Fonts::add_bold_fonts`].
-    #[must_use]
-    pub fn with_bold_fonts<I: IntoIterator<Item = Font>>(mut self, fonts: I) -> Self {
-        self.init_fallback_fonts();
-        self.fonts.as_mut().expect("fonts").add_bold_fonts(fonts);
-        self
-    }
-
-    /// Use the specified list of italic fonts for rendering. You may call this
-    /// multiple times to extend the list of fallback fonts.
-    ///
-    /// See also [`Fonts::add_italic_fonts`].
-    #[must_use]
-    pub fn with_italic_fonts<I: IntoIterator<Item = Font>>(mut self, fonts: I) -> Self {
-        self.init_fallback_fonts();
-        self.fonts.as_mut().expect("fonts").add_italic_fonts(fonts);
-        self
-    }
-
-    /// Use the specified list of bold italic fonts for rendering. You may call
-    /// this multiple times to extend the list of fallback fonts.
-    ///
-    /// See also [`Fonts::add_bold_italic_fonts`].
-    #[must_use]
-    pub fn with_bold_italic_fonts<I: IntoIterator<Item = Font>>(mut self, fonts: I) -> Self {
-        self.init_fallback_fonts();
-        self.fonts
-            .as_mut()
-            .expect("fonts")
-            .add_bold_italic_fonts(fonts);
+    /// Add all as fallback font.
+    /// You can add multiple fallbacks.
+    pub fn with_fallback_fonts<I: IntoIterator<Item = Font>>(mut self, fonts: I) -> Self {
+        for font in fonts {
+            self.fonts.add_fallback(font);
+        }
         self
     }
 
@@ -411,7 +355,20 @@ where
             .await
             .map_err(|e| Error::DeviceRequestFailed(Box::new(e)))?;
 
-        let fonts = self.fonts.as_ref().expect("fonts");
+        let mut fonts = self.fonts;
+        debug!("fonts from init {:#?}", fonts);
+
+        if !fonts.have_fallback() {
+            if let Some(f) = fallback_font() {
+                fonts.add_fallback(f);
+            }
+            if let Some(f) = fallback_symbol_font() {
+                fonts.add_fallback(f);
+            }
+            if let Some(f) = fallback_emoji_font() {
+                fonts.add_fallback(f);
+            }
+        }
 
         // this may create a surface that is bigger than the window.
         let width = self.width.max(fonts.width_px());
@@ -501,7 +458,7 @@ where
         let reset_bg = self.colors.c2c(self.reset_bg, [0; 3]);
 
         let cell_box = fonts.cell_box();
-        let font_count = fonts.count();
+        let shape_plan_count = fonts.shape_plan_count();
 
         let chars_wide = width / cell_box.width;
         let chars_high = height / cell_box.height;
@@ -511,7 +468,7 @@ where
             .compile(&device, &wgpu_view, &surface_config);
 
         Ok(WgpuBackend {
-            fonts: self.fonts.expect("fonts"),
+            fonts,
             tui_surface: TuiSurface {
                 image_frame: ImageFrame {
                     buffer: Arc::new(Mutex::new(ImageBuffer {
@@ -553,7 +510,7 @@ where
             },
             rendered: Default::default(),
 
-            tmp_plan_cache: PlanCache::new(font_count.max(2)),
+            tmp_plan_cache: PlanCache::new(shape_plan_count.max(2)),
             tmp_buffer: UnicodeBuffer::new(),
             tmp_rowbuf: String::new(),
             tmp_rowbuf_to_cell: Default::default(),

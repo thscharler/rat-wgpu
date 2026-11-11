@@ -11,20 +11,26 @@ pub struct Font {
     font: fontdb::ID,
     face_data: Arc<dyn AsRef<[u8]>>,
     face_idx: u32,
+    face_name: String,
 
     fallback: bool,
 
-    advance: f32,
+    // font metrics
     height: i16,
     ascender: i16,
+    em_advance: u16,
     underline_metrics: Option<LineMetrics>,
     strikeout_metrics: Option<LineMetrics>,
     monospaced: bool,
     bold: bool,
     italic: bool,
+    oblique: bool,
+
+    // glyph caches
     glyph_id: RefCell<HashMap<char, Option<GlyphId>>>,
     glyph_hor_advance: RefCell<HashMap<GlyphId, Option<u16>>>,
 
+    // rendered size
     height_px: u32,
     width_px: u32,
 }
@@ -33,9 +39,10 @@ impl Debug for Font {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Font")
             .field("font", &self.font)
+            .field("face_name", &self.face_name)
             .field("face_idx", &self.face_idx)
             .field("fallback", &self.fallback)
-            .field("advance", &self.advance)
+            .field("advance", &self.em_advance)
             .field("height", &self.height)
             .field("ascender", &self.ascender)
             .field("underline_metrics", &self.underline_metrics)
@@ -43,6 +50,7 @@ impl Debug for Font {
             .field("monospaced", &self.monospaced)
             .field("bold", &self.bold)
             .field("italic", &self.italic)
+            .field("oblique", &self.oblique)
             .field("height_px", &self.height_px)
             .field("width_px", &self.width_px)
             .finish()
@@ -61,36 +69,57 @@ impl Font {
 
         let face = Face::from_slice((*face_data).as_ref(), face_idx)?;
 
-        let em_idx;
-        let advance;
+        let face_name = face
+            .names()
+            .into_iter()
+            .find_map(|v| {
+                if v.name_id == ttf_parser::name_id::FULL_NAME {
+                    let n = if v.is_unicode() {
+                        v.to_string().unwrap_or_default()
+                    } else {
+                        String::from_utf8_lossy_owned(Vec::from(v.name))
+                    };
+                    Some(n)
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default();
+
         let height = face.height();
         let ascender = face.ascender();
         let monospaced = face.is_monospaced();
         let bold = face.is_bold();
         let italic = face.is_italic();
+        let oblique = face.is_oblique();
         let underline_metrics = face.underline_metrics();
-        let strike_metrics = face.strikeout_metrics();
+        let strikeout_metrics = face.strikeout_metrics();
+
+        let em_idx;
+        let em_advance;
         if face.is_monospaced() {
             em_idx = face.glyph_index('m').unwrap_or_default();
-            advance = face.glyph_hor_advance(em_idx).unwrap_or_default() as f32;
+            em_advance = face.glyph_hor_advance(em_idx).unwrap_or_default();
         } else {
             em_idx = face.glyph_index('n').unwrap_or_default();
-            advance = face.glyph_hor_advance(em_idx).unwrap_or_default() as f32;
+            em_advance = face.glyph_hor_advance(em_idx).unwrap_or_default();
         }
 
         Some(Self {
             font,
             face_data,
             face_idx,
+            face_name,
             fallback: false,
-            advance,
+            em_advance,
             height,
             ascender,
             underline_metrics,
-            strikeout_metrics: strike_metrics,
+            strikeout_metrics,
             monospaced,
             bold,
             italic,
+            oblique,
             glyph_id: Default::default(),
             glyph_hor_advance: Default::default(),
             height_px: 0,
@@ -102,12 +131,12 @@ impl Font {
         self.font
     }
 
-    pub fn as_face<'a>(&'a self) -> Face<'a> {
-        Face::from_slice((*self.face_data).as_ref(), self.face_idx).expect("font-face")
+    pub fn face_name(&self) -> &str {
+        self.face_name.as_ref()
     }
 
-    pub(crate) fn is_monospaced(&self) -> bool {
-        self.monospaced
+    pub fn as_face<'a>(&'a self) -> Face<'a> {
+        Face::from_slice((*self.face_data).as_ref(), self.face_idx).expect("font-face")
     }
 
     pub(crate) fn is_bold(&self) -> bool {
@@ -118,6 +147,10 @@ impl Font {
         self.italic
     }
 
+    pub(crate) fn is_oblique(&self) -> bool {
+        self.oblique
+    }
+
     pub(crate) fn is_fallback(&self) -> bool {
         self.fallback
     }
@@ -126,20 +159,11 @@ impl Font {
         self.fallback = fallback;
     }
 
-    pub(crate) fn ascender(&self) -> u32 {
-        (self.ascender as f32 * self.height_px as f32 / self.height as f32) as u32
-    }
-
-    // Base advance. Or em (or en).
-    pub(crate) fn em_advance(&self) -> f32 {
-        self.advance
-    }
-
     pub(crate) fn have_glyph(&self, ch: char) -> bool {
         {
             let glyph_index = self.glyph_id.borrow();
-            if glyph_index.get(&ch).is_some() {
-                return true;
+            if let Some(glyph_id) = glyph_index.get(&ch) {
+                return glyph_id.is_some();
             }
         }
 
@@ -171,21 +195,28 @@ impl Font {
         }
     }
 
-    // Active font height.
+    /// Active font height(px).
     pub(crate) fn set_height_px(&mut self, height_px: u32) {
         self.height_px = height_px;
     }
 
-    // Active font width.
+    /// Active font-width(px).
     pub(crate) fn set_width_px(&mut self, width_px: u32) {
         self.width_px = width_px;
     }
 
-    // Base width, preserving the aspect ratio of the font.
-    pub(crate) fn base_width_px(&self) -> u32 {
-        (self.advance * self.height_px as f32 / self.height as f32) as u32
+    /// Standard em width for the font for the active font-height(px).
+    pub(crate) fn em_advance_px(&self) -> u32 {
+        (self.em_advance as f32 * self.height_px as f32 / self.height as f32) as u32
     }
 
+    /// Ascender for the font for the active font-height(px).
+    pub(crate) fn ascender_px(&self) -> u32 {
+        (self.ascender as f32 * self.height_px as f32 / self.height as f32) as u32
+    }
+
+    /// Font scale factor for the active font-height(px)
+    /// Scales this font to fit in the overall cell-box.
     pub(crate) fn scale_y(&self, _glyph_id: u16, block_char: bool) -> f32 {
         if self.fallback && block_char {
             self.height_px as f32 / self.height as f32
@@ -198,6 +229,8 @@ impl Font {
         }
     }
 
+    /// Font scale factor for the active font-height(px) and font-width(px).
+    /// Scales this font to fit in the overall cell-box.
     pub(crate) fn scale_x(
         &self,
         glyph_id: GlyphId,

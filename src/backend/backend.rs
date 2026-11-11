@@ -441,25 +441,6 @@ impl<'s> WgpuBackend<'s> {
         self.tui_surface.colors = new_colors;
     }
 
-    /// Update the fonts used for rendering. This will cause a full repaint of
-    /// the screen the next time [`WgpuBackend::flush`] is called. A call to
-    /// [ratatui_core::terminal::Terminal::draw] will do this.
-    ///
-    /// This will also change the number of cells if the font has a different
-    /// aspect ratio for its glyphs.
-    pub fn update_fonts(&mut self, new_fonts: Fonts) {
-        self.fonts = new_fonts;
-
-        rebuild_surface(
-            self.fonts.cell_box(),
-            &mut self.tui_surface,
-            &mut self.rendered,
-            &mut self.wgpu_base,
-            &mut self.wgpu_atlas,
-            self.wgpu_post_process.as_mut(),
-        );
-    }
-
     /// Replace the fonts used for rendering. This will keep the fallback fonts.
     /// If you want to replace those too, use [update_fonts].
     ///
@@ -468,7 +449,9 @@ impl<'s> WgpuBackend<'s> {
     /// A call to [ratatui_core::terminal::Terminal::draw] will do this.
     pub fn update_font_vec(&mut self, new_fonts: Vec<Font>) {
         self.fonts.clear_fonts();
-        self.fonts.add_fonts(new_fonts);
+        for font in new_fonts {
+            self.fonts.add_font(font);
+        }
 
         rebuild_surface(
             self.fonts.cell_box(),

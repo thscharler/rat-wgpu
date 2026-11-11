@@ -24,6 +24,7 @@ winit-event = ["dep:winit", "dep:crossterm"]
 
 [dependencies]
 rustybuzz = "0.20"
+ttf-parser = "0.25"
 ratatui-core = "0.1"
 log = "0.4"
 append-only-vec = "0.1"

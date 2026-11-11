@@ -1,101 +1,88 @@
 use crate::CellBox;
-use crate::font::font::Font;
-use log::warn;
+use crate::font::Font;
 use ratatui_core::buffer::Cell;
 use ratatui_core::style::Modifier;
 
-/// A collection of fonts to use for rendering.
-/// Supports font fallback.
+/// Collection of fonts for rendering.
 #[derive(Debug)]
-pub struct Fonts {
-    width_px: u32,
-    height_px: u32,
-    ascender: u32,
-
-    em_advance: f32,
-
+pub(crate) struct Fonts {
     fallback: Vec<Font>,
-
     regular: Vec<Font>,
     bold: Vec<Font>,
     italic: Vec<Font>,
     bold_italic: Vec<Font>,
+
+    // derived from all available fonts.
+    height_px: u32,
+    width_px: u32,
+    ascender_px: u32,
+}
+
+impl Default for Fonts {
+    fn default() -> Self {
+        Self {
+            fallback: Default::default(),
+            regular: Default::default(),
+            bold: Default::default(),
+            italic: Default::default(),
+            bold_italic: Default::default(),
+            height_px: 20,
+            width_px: 20 / 2,
+            ascender_px: 20 * 4 / 5,
+        }
+    }
 }
 
 impl Fonts {
-    /// Create a new, empty set of fonts. The provided font will be used as a
-    /// last-resort fallback if no other fonts can render a particular
-    /// character. Rendering will attempt to fake bold/italic styles using this
-    /// font where appropriate.
+    /// Add the given font as a fallback.
     ///
-    /// The provided size_px will be the rendered height in pixels of all fonts
-    /// in this collection.
-    pub fn new(mut fallback: Font, size_px: u32) -> Self {
-        fallback.set_height_px(size_px);
-        fallback.set_width_px(fallback.base_width_px());
-        fallback.set_fallback(true);
+    /// Fallback fonts are searched in the order
+    /// of addition.
+    pub fn add_fallback(&mut self, mut font: Font) {
+        font.set_fallback(true);
+        self.fallback.push(font);
+        self.set_height_px(self.height_px);
+    }
 
-        Self {
-            width_px: fallback.base_width_px(),
-            height_px: size_px,
-            ascender: fallback.ascender(),
-            em_advance: fallback.em_advance(),
-            fallback: vec![fallback],
-            regular: vec![],
-            bold: vec![],
-            italic: vec![],
-            bold_italic: vec![],
+    /// Is any fallback font set?
+    pub fn have_fallback(&self) -> bool {
+        !self.fallback.is_empty()
+    }
+
+    /// Add a font.
+    ///
+    /// Typically, you add all fonts of a font-family.
+    /// At least one regular, italic, bold and bold+italic Font
+    /// is good. At a minimum a regular font will do.
+    pub fn add_font(&mut self, font: Font) {
+        if (font.is_italic() || font.is_oblique()) && font.is_bold() {
+            self.bold_italic.push(font);
+        } else if font.is_italic() || font.is_oblique() {
+            self.italic.push(font);
+        } else if font.is_bold() {
+            self.bold.push(font);
+        } else {
+            self.regular.push(font);
         }
+        self.set_height_px(self.height_px);
     }
 
-    /// Create a new, empty set of fonts. The provided fonts will be used as a
-    /// last-resort fallback if no other fonts can render a particular
-    /// character. Rendering will attempt to fake bold/italic styles using this
-    /// font where appropriate.
-    ///
-    /// The expectation is that the fallback fonts accommodate for missing symbols
-    /// and emojis. Any fonts used for actual text display should use [add_fonts]
-    ///
-    /// The provided size_px will be the rendered height in pixels of all fonts
-    /// in this collection.
-    pub fn new_vec(mut fonts: Vec<Font>, size_px: u32) -> Self {
-        fonts.iter_mut().enumerate().for_each(|(_, f)| {
-            f.set_height_px(size_px);
-            f.set_width_px(f.base_width_px());
-            f.set_fallback(true);
-        });
-
-        Self {
-            width_px: size_px / 2, // rough estimate
-            height_px: size_px,
-            ascender: size_px * 4 / 5,        // rough estimate
-            em_advance: size_px as f32 / 2.0, // rough estimate
-            fallback: fonts,
-            regular: vec![],
-            bold: vec![],
-            italic: vec![],
-            bold_italic: vec![],
-        }
-    }
-
-    #[inline]
-    pub fn ascender(&self) -> u32 {
-        self.ascender
-    }
-
-    #[inline]
-    pub fn em_advance(&self) -> f32 {
-        self.em_advance
-    }
-
-    /// The height (in pixels) of all fonts.
-    #[inline]
-    pub fn height_px(&self) -> u32 {
-        self.height_px
+    /// Remove the non-fallback fonts.
+    pub fn clear_fonts(&mut self) {
+        self.bold_italic.clear();
+        self.italic.clear();
+        self.bold.clear();
+        self.regular.clear();
+        self.set_height_px(self.height_px);
     }
 
     /// Change the height of all fonts in this collection to the specified
     /// height in pixels.
+    ///
+    /// __Panic__
+    ///
+    /// Panics for a font-height of 0.
+    ///
     pub fn set_height_px(&mut self, height_px: u32) {
         self.height_px = height_px;
 
@@ -106,27 +93,22 @@ impl Fonts {
             .chain(self.italic.iter_mut())
             .chain(self.fallback.iter_mut())
             .for_each(|f| {
-                f.set_height_px(height_px);
+                f.set_height_px(self.height_px);
             });
 
-        if !self.regular.is_empty()
-            || !self.bold.is_empty()
-            || !self.italic.is_empty()
-            || !self.bold_italic.is_empty()
-        {
-            (self.width_px, self.ascender, self.em_advance) = self
-                .regular
-                .iter()
-                .chain(self.bold.iter())
-                .chain(self.italic.iter())
-                .chain(self.bold_italic.iter())
-                .map(|font| (font.base_width_px(), font.ascender(), font.em_advance()))
-                .next() /* first is fine */
-                .expect("font");
-        } else {
-            self.width_px = self.height_px / 2;
-            self.ascender = self.height_px * 4 / 5;
-            self.em_advance = self.height_px as f32 / 2.0;
+        (self.width_px, self.ascender_px) = self
+            .regular
+            .iter()
+            .chain(self.bold.iter())
+            .chain(self.italic.iter())
+            .chain(self.bold_italic.iter())
+            .chain(self.fallback.iter())
+            .map(|font| (font.em_advance_px(), font.ascender_px()))
+            .next() /* first is fine */
+            .unwrap_or((self.height_px / 2, self.height_px * 4 / 5));
+
+        if self.width_px == 0 {
+            self.width_px = 1;
         }
 
         self.regular
@@ -139,7 +121,6 @@ impl Fonts {
                 f.set_width_px(self.width_px);
             });
 
-        assert_ne!(self.height_px, 0);
         assert_ne!(self.width_px, 0);
     }
 
@@ -148,100 +129,22 @@ impl Fonts {
         self.width_px
     }
 
-    /// Remove the non-fallback fonts.
-    pub fn clear_fonts(&mut self) {
-        self.bold_italic.clear();
-        self.italic.clear();
-        self.bold.clear();
-        self.regular.clear();
-        self.set_height_px(self.height_px);
-    }
-
-    /// Add a collection of fonts for various styles. They will automatically be
-    /// added to the appropriate fallback font list based on the font's
-    /// bold/italic properties. Note that this will automatically organize fonts
-    /// by relative width in order to optimize fallback rendering quality. The
-    /// ordering of already provided fonts will remain unchanged.
-    ///
-    /// Adding more fonts will not have any effect, if the text can be rendered
-    /// with a prior font.
-    pub fn add_fonts(&mut self, fonts: impl IntoIterator<Item = Font>) {
-        for font in fonts {
-            if !font.is_monospaced() {
-                warn!("Non monospace font used in add_fonts, this may cause unexpected rendering.");
-            }
-            if font.is_italic() && font.is_bold() {
-                self.bold_italic.push(font);
-            } else if font.is_italic() {
-                self.italic.push(font);
-            } else if font.is_bold() {
-                self.bold.push(font);
-            } else {
-                self.regular.push(font);
-            }
-        }
-        self.set_height_px(self.height_px);
-    }
-
-    /// Add a new collection of fonts for regular styled text. These fonts will
-    /// come _after_ previously provided fonts in the fallback order.
-    pub fn add_regular_fonts(&mut self, fonts: impl IntoIterator<Item = Font>) {
-        for font in fonts {
-            self.regular.push(font);
-        }
-        self.set_height_px(self.height_px);
-    }
-
-    /// Add a new collection of fonts for bold styled text. These fonts will
-    /// come _after_ previously provided fonts in the fallback order.
-    ///
-    /// You do not have to provide these for bold text to be supported. If no
-    /// bold fonts are supplied, rendering will fall back to the regular fonts
-    /// with fake bolding.
-    pub fn add_bold_fonts(&mut self, fonts: impl IntoIterator<Item = Font>) {
-        for font in fonts {
-            self.bold.push(font);
-        }
-        self.set_height_px(self.height_px);
-    }
-
-    /// Add a new collection of fonts for italic styled text. These fonts will
-    /// come _after_ previously provided fonts in the fallback order.
-    ///
-    /// It is recommended, but not required, that you provide italic fonts if
-    /// your application intends to make use of italics. If no italic fonts
-    /// are supplied, rendering will fall back to the regular fonts with fake
-    /// italics.
-    pub fn add_italic_fonts(&mut self, fonts: impl IntoIterator<Item = Font>) {
-        for font in fonts {
-            self.italic.push(font);
-        }
-        self.set_height_px(self.height_px);
-    }
-
-    /// Add a new collection of fonts for bold italic styled text. These fonts
-    /// will come _after_ previously provided fonts in the fallback order.
-    ///
-    /// You do not have to provide these for bold text to be supported. If no
-    /// bold fonts are supplied, rendering will fall back to the italic fonts
-    /// with fake bolding.
-    pub fn add_bold_italic_fonts(&mut self, fonts: impl IntoIterator<Item = Font>) {
-        for font in fonts {
-            self.bold_italic.push(font);
-        }
-        self.set_height_px(self.height_px);
+    /// The height (in pixels) of all fonts.
+    #[inline]
+    pub fn height_px(&self) -> u32 {
+        self.height_px
     }
 
     /// Size of a cell with the current font in px.
     pub fn cell_box(&self) -> CellBox {
         CellBox {
-            width: self.width_px(),
-            height: self.height_px(),
-            ascender: self.ascender(),
+            width: self.width_px,
+            height: self.height_px,
+            ascender: self.ascender_px,
         }
     }
 
-    pub(crate) fn count(&self) -> usize {
+    pub(crate) fn shape_plan_count(&self) -> usize {
         1 + self.bold.len() + self.italic.len() + self.bold_italic.len() + self.regular.len()
     }
 
