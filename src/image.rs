@@ -1,14 +1,33 @@
+//!
+//! Rendering images in the terminal.
+//!
+//! Rendering an image works in two steps.
+//!
+//! * Call [WgpuBackend::add_image] to pass the image data to the backend.
+//! You get a handle for the image that will be used for the actual rendering.
+//! These images are stored as Textures in GPU memory and are freed
+//! when the last clone of the handle is dropped.
+//!
+//! * Get the ImageBuffer from the backend.
+//!
+//! Then you call the normal [Terminal::draw]. Add any images to be rendered
+//! during `draw`.
+//!
+//! At the end of `draw` ratatui will send its changes to the backend
+//! and all buffered images will be rendered too.
+//!
+
 use crate::CellBox;
 use crate::util::intersect;
 use euclid::Vector2D;
 use raqote::Transform;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-/// Handle for any added image.
+/// Handle for an added image.
 ///
-/// When the handle is dropped, the backing texture will be dropped after
-/// the next flush().
+/// When the last clone of the handle is dropped, the backing
+/// texture will be dropped after the next flush().
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct ImageHandle {
     id: Arc<usize>,
@@ -19,7 +38,7 @@ impl ImageHandle {
         Self { id: Arc::new(id) }
     }
 
-    pub(crate) fn id(&self) -> usize {
+    pub fn id(&self) -> usize {
         *self.id
     }
 
@@ -79,6 +98,7 @@ pub struct ImageCell {
     pub tr: Transform,
 }
 
+/// Parameters for image rendering.
 #[derive(Debug, Default, Clone)]
 pub struct ImageArg {
     view_clip_area: Option<ratatui_core::layout::Rect>,
@@ -88,28 +108,38 @@ pub struct ImageArg {
 }
 
 impl ImageArg {
+    /// New parameter set.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Clip the image to the given Rect.
     pub fn clip_area(mut self, area: ratatui_core::layout::Rect) -> Self {
         self.view_clip_area = Some(area);
         self.view_clip = None;
         self
     }
 
+    /// Clip the image to the given area in screen-pixels.
     pub fn clip(mut self, rect: (i32, i32, u32, u32)) -> Self {
         self.view_clip = Some(rect);
         self.view_clip_area = None;
         self
     }
 
+    /// How should the image be transformed to fit into the
+    /// given area.
+    ///
+    /// This clears any transform set before.
     pub fn fit(mut self, fit: ImageFit) -> Self {
         self.fit = Some(fit);
         self.tr = None;
         self
     }
 
+    /// Apply some transformation to the image.
+    ///
+    /// This clears any fit set before.
     pub fn transform(mut self, tr: Transform) -> Self {
         self.tr = Some(tr);
         self.fit = None;
@@ -117,22 +147,11 @@ impl ImageArg {
     }
 }
 
-/// The ImageFrame works analogous to the [ratatui_core::terminal::Frame].
-/// You tell it what images should be rendered for one render-pass.
+/// The ImageBuffer gets the image-handles for the images
+/// that will actually be rendered during one render pass.
 ///
-/// During flush() it will check the data and render what is necessary.
-///
-#[derive(Debug, Default, Clone)]
-pub struct ImageFrame {
-    pub(crate) buffer: Arc<Mutex<ImageBuffer>>,
-}
-
-impl ImageFrame {
-    pub fn buffer(&self) -> Arc<Mutex<ImageBuffer>> {
-        self.buffer.clone()
-    }
-}
-
+/// It will be automatically processed at the end of
+/// [Terminal::draw].
 #[derive(Debug, Default, Clone)]
 pub struct ImageBuffer {
     // The buffer area.
@@ -149,6 +168,7 @@ pub struct ImageBuffer {
     pub(crate) images: Vec<ImageCell>,
 }
 
+/// Scaling of the image to the given area.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ImageScale {
     XY,
@@ -156,6 +176,7 @@ enum ImageScale {
     Y,
 }
 
+/// Alignment of the image within the given area.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ImageAlign {
     Start,
@@ -164,22 +185,23 @@ enum ImageAlign {
 }
 
 impl ImageBuffer {
-    pub fn new(
-        area: ratatui_core::layout::Rect,
-        cell_box: CellBox,
-        image_size: HashMap<usize, (u32, u32)>,
-    ) -> Self {
-        Self {
-            area,
-            cell_box,
-            image_size,
-            images: Default::default(),
-        }
-    }
-
-    /// Create a new ImageBuffer with the same cell_box and image-sizes,
-    /// but a new area and an empty image list.
-    pub fn derive(&self, area: ratatui_core::layout::Rect) -> Self {
+    /// Create a temporary ImageBuffer.
+    ///
+    /// Any images added will not be automatically rendered, you
+    /// have to append the temporary buffer to the one given
+    /// by [ImageFrame].
+    ///
+    /// You use this if you want to render images to a bigger
+    /// area and later move and clip the area to an actual target
+    /// area on screen.
+    ///
+    /// see [ImageBuffer::append_view]
+    ///
+    /// __Note__
+    ///
+    /// Useful when you want to scroll a bigger image.
+    ///
+    pub fn new_view(&self, area: ratatui_core::layout::Rect) -> Self {
         Self {
             area,
             cell_box: self.cell_box,
@@ -188,10 +210,11 @@ impl ImageBuffer {
         }
     }
 
-    /// Add all the images from the given buffer.
+    /// Add all images from the given ImageBuffer.
     ///
-    /// Shift each image by shift cells and clip each image everything.
-    pub fn append(
+    /// You can move all images by shift cells and clip them
+    /// to the given area.
+    pub fn append_view(
         &mut self,
         buf: ImageBuffer,
         shift: (i16, i16),
@@ -252,15 +275,16 @@ impl ImageBuffer {
         &self.images
     }
 
-    /// Render an image.
+    /// Render an image in the given area.
+    ///
+    /// To get an ImageHandle, add the image with [WgpuBackend::add_image].
     pub fn render(&mut self, id: &ImageHandle, area: ratatui_core::layout::Rect, arg: ImageArg) {
         self.render_px(id, self.rect_px(area), arg)
     }
 
-    /// Render an image.
+    /// Render an image in the given area.
     ///
-    /// To get an ImageHandle add the image first with [add_image]. Add image
-    /// will create the texture for the image.
+    /// To get an ImageHandle, add the image with [WgpuBackend::add_image].
     pub fn render_px(&mut self, id: &ImageHandle, rect: (i32, i32, u32, u32), arg: ImageArg) {
         let tr = if let Some(fit) = arg.fit {
             use ImageAlign::*;

@@ -9,7 +9,7 @@ use crate::backend::{
 use crate::colors::ColorTable;
 use crate::cursor::CursorStyle;
 use crate::font::{Font, Fonts, fallback_emoji_font, fallback_font, fallback_symbol_font};
-use crate::image::{ImageBuffer, ImageFrame};
+use crate::image::ImageBuffer;
 use crate::postprocessor::PostProcessorBuilder;
 use crate::postprocessor::default::DefaultPostProcessorBuilder;
 use crate::text_atlas::Atlas;
@@ -470,19 +470,17 @@ where
         Ok(WgpuBackend {
             fonts,
             tui_surface: TuiSurface {
-                image_frame: ImageFrame {
-                    buffer: Arc::new(Mutex::new(ImageBuffer {
-                        area: ratatui_core::layout::Rect::new(
-                            0,
-                            0,
-                            chars_wide as u16,
-                            chars_high as u16,
-                        ),
-                        cell_box,
-                        image_size: Default::default(),
-                        images: Default::default(),
-                    })),
-                },
+                image_buffer: Arc::new(Mutex::new(ImageBuffer {
+                    area: ratatui_core::layout::Rect::new(
+                        0,
+                        0,
+                        chars_wide as u16,
+                        chars_high as u16,
+                    ),
+                    cell_box,
+                    image_size: Default::default(),
+                    images: Default::default(),
+                })),
                 images: Default::default(),
                 cells: Default::default(),
                 cell_font: Default::default(),

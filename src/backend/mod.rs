@@ -1,7 +1,7 @@
 use crate::backend::surface::RenderSurface;
 use crate::colors::{ColorTable, Rgb};
 use crate::cursor::CursorStyle;
-use crate::image::{ImageFrame, ImageHandle};
+use crate::image::{ImageBuffer, ImageHandle};
 use crate::text_atlas::{Atlas, CacheRect};
 use bitvec::vec::BitVec;
 use raqote::Transform;
@@ -9,6 +9,7 @@ use ratatui_core::buffer::{Cell, CellDiffOption};
 use ratatui_core::style::Modifier;
 use rustybuzz::ttf_parser::GlyphId;
 use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 use wgpu::{
     BindGroup, BindGroupLayout, Buffer, Device, Queue, RenderPipeline, Sampler,
     SurfaceConfiguration, Texture, TextureView,
@@ -55,7 +56,7 @@ type Rendered = Vec<(i32, i32, GlyphId, RenderInfo)>;
 struct TuiSurface {
     // communication with the application. can run in parallel
     // with ratatui's draw() function.
-    image_frame: ImageFrame,
+    image_buffer: Arc<Mutex<ImageBuffer>>,
 
     // current images
     images: Vec<ImageInfo>,

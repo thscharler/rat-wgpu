@@ -10,8 +10,8 @@ use crate::colors::{ColorTable, Rgb};
 use crate::cursor::{Blinking, CursorStyle};
 use crate::font::rasterize::rasterize_glyph;
 use crate::font::{Font, Fonts};
-use crate::image::ImageHandle;
-use crate::image::{ImageCell, ImageFrame};
+use crate::image::ImageCell;
+use crate::image::{ImageBuffer, ImageHandle};
 use crate::postprocessor::{PostProcessor, PostProcessorBuilder};
 use crate::text_atlas::Key;
 use crate::util::clip_uv;
@@ -293,20 +293,6 @@ impl<'s> Backend for WgpuBackend<'s> {
 }
 
 impl<'s> WgpuBackend<'s> {
-    /// Returns the ImageFrame.
-    ///
-    /// This will be used by the application to queue images for rendering.
-    /// Add the image with [add_image] first, and use the ImageBuffer when
-    /// rendering the UI.
-    ///
-    /// __Info__
-    ///
-    /// You can keep the ImageFrame around. It's internals will update
-    /// if cell_box or window-size changes.
-    pub fn image_frame(&self) -> ImageFrame {
-        self.tui_surface.image_frame.clone()
-    }
-
     /// Background color or Color::Reset.
     ///
     /// This will also fill the unclaimed area at the right/bottom.
@@ -570,11 +556,23 @@ impl<'s> WgpuBackend<'s> {
             .img
             .insert(id, WgpuImage { texture: img_view });
 
-        let image_buffer = self.tui_surface.image_frame.buffer();
+        let image_buffer = self.tui_surface.image_buffer.clone();
         let mut image_buffer = image_buffer.lock().expect("lock");
         image_buffer.image_size.insert(id, (width, height));
 
         handle
+    }
+
+    /// Returns the ImageBuffer.
+    ///
+    /// This will be used by the application to queue images for rendering.
+    /// Add the image with [add_image] first, and use the ImageBuffer when
+    /// rendering the UI.
+    ///
+    /// The ImageBuffer will be used and emptied at the end of the
+    /// [Terminal::draw] call.
+    pub fn image_buffer(&self) -> Arc<Mutex<ImageBuffer>> {
+        self.tui_surface.image_buffer.clone()
     }
 
     /// Returns a BufferView for the current rendered result.
@@ -683,7 +681,7 @@ fn rebuild_surface(
     tui_surface.dirty_cells.clear();
     tui_surface.dirty_img.clear();
 
-    let image_buffer = tui_surface.image_frame.buffer();
+    let image_buffer = tui_surface.image_buffer.clone();
     let mut image_buffer = image_buffer.lock().expect("lock");
     image_buffer.cell_box = cell_box;
     image_buffer.area = ratatui_core::layout::Rect::new(0, 0, chars_wide as u16, chars_high as u16);
@@ -711,7 +709,7 @@ fn drop_images(tui_surface: &mut TuiSurface, wgpu_images: &mut WgpuImages) {
             dropped.push(img_id.clone());
         }
     }
-    let image_buffer = tui_surface.image_frame.buffer();
+    let image_buffer = tui_surface.image_buffer.clone();
     let mut image_buffer = image_buffer.lock().expect("lock");
     for img_id in dropped {
         wgpu_images.handles.remove(&img_id);
@@ -1000,7 +998,7 @@ fn draw_tui(
 
     {
         let mut images = Vec::new();
-        let image_buffer = tui_surface.image_frame.buffer();
+        let image_buffer = tui_surface.image_buffer.clone();
         let mut image_buffer = image_buffer.lock().expect("lock");
         for ImageCell {
             image_id,
