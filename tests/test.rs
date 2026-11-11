@@ -1,9 +1,10 @@
+use fontdb::Source;
 use image::ImageBuffer;
 use image::Rgba;
 use image::load_from_memory;
 use image::{ExtendedColorType, GenericImageView};
 use rat_wgpu::Builder;
-use rat_wgpu::font::{Font, Fonts};
+use rat_wgpu::font::{Font, Fonts, font_db};
 use rat_wgpu::postprocessor::default::DefaultPostProcessorBuilder;
 use ratatui_core::style::Color;
 use ratatui_core::style::Stylize;
@@ -13,17 +14,24 @@ use ratatui_widgets::block::Block;
 use ratatui_widgets::paragraph::Paragraph;
 use serial_test::serial;
 use std::fs::create_dir_all;
+use std::sync::Arc;
 use wgpu::TextureFormat;
 
 #[test]
 #[serial]
 fn a_z() {
+    let font_id = {
+        let mut font_db = font_db().write().expect("font-db");
+        font_db.load_font_source(Source::Binary(Arc::new(include_bytes!(
+            "fonts/CascadiaMono-Regular.ttf"
+        ))))[0]
+    };
+
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
             Builder::<DefaultPostProcessorBuilder>::default()
                 .with_fallback_fonts(Fonts::new(
-                    Font::new(include_bytes!("fonts/CascadiaMono-Regular.ttf"))
-                        .expect("Invalid font file"),
+                    Font::new(font_id).expect("Invalid font"),
                     24,
                 ))
                 .with_width_and_height(512, 72)
@@ -74,12 +82,18 @@ fn a_z() {
 #[test]
 #[serial]
 fn arabic() {
+    let font_id = {
+        let mut font_db = font_db().write().expect("font-db");
+        font_db.load_font_source(Source::Binary(Arc::new(include_bytes!(
+            "fonts/CascadiaMono-Regular.ttf"
+        ))))[0]
+    };
+
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
             Builder::<DefaultPostProcessorBuilder>::default()
                 .with_fallback_fonts(Fonts::new(
-                    Font::new(include_bytes!("fonts/CascadiaMono-Regular.ttf"))
-                        .expect("Invalid font file"),
+                    Font::new(font_id).expect("Invalid font"),
                     24,
                 ))
                 .with_width_and_height(256, 72)
@@ -129,11 +143,18 @@ fn arabic() {
 #[test]
 #[serial]
 fn really_wide() {
+    let font_id = {
+        let mut font_db = font_db().write().expect("font-db");
+        font_db.load_font_source(Source::Binary(Arc::new(include_bytes!(
+            "fonts/Fairfax.ttf"
+        ))))[0]
+    };
+
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
             Builder::<DefaultPostProcessorBuilder>::default()
                 .with_fallback_fonts(Fonts::new(
-                    Font::new(include_bytes!("fonts/Fairfax.ttf")).expect("Invalid font file"),
+                    Font::new(font_id).expect("Invalid font"),
                     24,
                 ))
                 .with_width_and_height(512, 72)
@@ -183,12 +204,18 @@ fn really_wide() {
 #[test]
 #[serial]
 fn mixed() {
+    let font_id = {
+        let mut font_db = font_db().write().expect("font-db");
+        font_db.load_font_source(Source::Binary(Arc::new(include_bytes!(
+            "fonts/CascadiaMono-Regular.ttf"
+        ))))[0]
+    };
+
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
             Builder::<DefaultPostProcessorBuilder>::default()
                 .with_fallback_fonts(Fonts::new(
-                    Font::new(include_bytes!("fonts/CascadiaMono-Regular.ttf"))
-                        .expect("Invalid font file"),
+                    Font::new(font_id).expect("Invalid font"),
                     24,
                 ))
                 .with_width_and_height(512, 72)
@@ -241,12 +268,18 @@ fn mixed() {
 #[test]
 #[serial]
 fn mixed_colors() {
+    let font_id = {
+        let mut font_db = font_db().write().expect("font-db");
+        font_db.load_font_source(Source::Binary(Arc::new(include_bytes!(
+            "fonts/CascadiaMono-Regular.ttf"
+        ))))[0]
+    };
+
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
             Builder::<DefaultPostProcessorBuilder>::default()
                 .with_fallback_fonts(Fonts::new(
-                    Font::new(include_bytes!("fonts/CascadiaMono-Regular.ttf"))
-                        .expect("Invalid font file"),
+                    Font::new(font_id).expect("Invalid font"),
                     24,
                 ))
                 .with_width_and_height(512, 72)
@@ -303,11 +336,18 @@ fn mixed_colors() {
 #[test]
 #[serial]
 fn overlap() {
+    let font_id = {
+        let mut font_db = font_db().write().expect("font-db");
+        font_db.load_font_source(Source::Binary(Arc::new(include_bytes!(
+            "fonts/Fairfax.ttf"
+        ))))[0]
+    };
+
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
             Builder::<DefaultPostProcessorBuilder>::default()
                 .with_fallback_fonts(Fonts::new(
-                    Font::new(include_bytes!("fonts/Fairfax.ttf")).expect("Invalid font file"),
+                    Font::new(font_id).expect("Invalid font"),
                     24,
                 ))
                 .with_width_and_height(256, 72)
@@ -391,11 +431,18 @@ fn overlap() {
 #[test]
 #[serial]
 fn overlap_colors() {
+    let font_id = {
+        let mut font_db = font_db().write().expect("font-db");
+        font_db.load_font_source(Source::Binary(Arc::new(include_bytes!(
+            "fonts/Fairfax.ttf"
+        ))))[0]
+    };
+
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
             Builder::<DefaultPostProcessorBuilder>::default()
                 .with_fallback_fonts(Fonts::new(
-                    Font::new(include_bytes!("fonts/Fairfax.ttf")).expect("Invalid font file"),
+                    Font::new(font_id).expect("Invalid font"),
                     24,
                 ))
                 .with_width_and_height(256, 72)
@@ -445,11 +492,18 @@ fn overlap_colors() {
 #[test]
 #[serial]
 fn rgb_conversion() {
+    let font_id = {
+        let mut font_db = font_db().write().expect("font-db");
+        font_db.load_font_source(Source::Binary(Arc::new(include_bytes!(
+            "fonts/Fairfax.ttf"
+        ))))[0]
+    };
+
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
             Builder::<DefaultPostProcessorBuilder>::default()
                 .with_fallback_fonts(Fonts::new(
-                    Font::new(include_bytes!("fonts/Fairfax.ttf")).expect("Invalid font file"),
+                    Font::new(font_id).expect("Invalid font"),
                     24,
                 ))
                 .with_width_and_height(256, 72)
@@ -499,11 +553,18 @@ fn rgb_conversion() {
 #[test]
 #[serial]
 fn srgb_conversion() {
+    let font_id = {
+        let mut font_db = font_db().write().expect("font-db");
+        font_db.load_font_source(Source::Binary(Arc::new(include_bytes!(
+            "fonts/Fairfax.ttf"
+        ))))[0]
+    };
+
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
             Builder::<DefaultPostProcessorBuilder>::default()
                 .with_fallback_fonts(Fonts::new(
-                    Font::new(include_bytes!("fonts/Fairfax.ttf")).expect("Invalid font file"),
+                    Font::new(font_id).expect("Invalid font"),
                     24,
                 ))
                 .with_width_and_height(256, 72)

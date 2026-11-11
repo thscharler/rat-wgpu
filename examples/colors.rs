@@ -1,5 +1,4 @@
 use palette::{IntoColor, Okhsv, Srgb};
-use rat_wgpu::font::FontData;
 use rat_wgpu::postprocessor::crt::{CrtPostProcessorBuilder, CrtSettings};
 use rat_wgpu::{Builder, WgpuBackend};
 use ratatui_core::backend::Backend;
@@ -16,10 +15,11 @@ use winit::event::WindowEvent;
 use winit::event_loop::EventLoop;
 use winit::window::Window;
 use winit::window::WindowAttributes;
+use rat_wgpu::font::{fallback_emoji_font, fallback_font};
 
 pub struct App {
     window: Option<Arc<Window>>,
-    backend: Option<Terminal<WgpuBackend<'static, 'static>>>,
+    backend: Option<Terminal<WgpuBackend<'static>>>,
     timer: Instant,
     last_frame: Instant,
     durations: [Option<Duration>; 100],
@@ -59,8 +59,8 @@ impl ApplicationHandler for App {
                         CrtSettings::default(),
                     ))
                     .with_fonts([
-                        FontData.fallback_font().expect("fallback"),
-                        FontData.fallback_emoji_font().expect("emoji"),
+                        fallback_font().expect("fallback"),
+                        fallback_emoji_font().expect("emoji"),
                     ])
                     .with_backends(Backends::from_comma_list("vulkan"))
                     .with_width_and_height(size.width, size.height)

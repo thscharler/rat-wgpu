@@ -1,5 +1,5 @@
 use chrono::Local;
-use rat_wgpu::font::FontData;
+use rat_wgpu::font::{fallback_emoji_font, fallback_font};
 use rat_wgpu::{Builder, WgpuBackend};
 use ratatui_core::style::Stylize;
 use ratatui_core::terminal::Terminal;
@@ -14,9 +14,9 @@ use winit::event_loop::EventLoop;
 use winit::window::Window;
 use winit::window::WindowAttributes;
 
-pub struct App<'d> {
+pub struct App {
     window: Option<Arc<Window>>,
-    backend: Option<Terminal<WgpuBackend<'d, 'static>>>,
+    backend: Option<Terminal<WgpuBackend<'static>>>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -33,7 +33,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-impl ApplicationHandler for App<'_> {
+impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         let mut attr = WindowAttributes::default();
         attr.visible = false;
@@ -46,8 +46,8 @@ impl ApplicationHandler for App<'_> {
                 futures_lite::future::block_on(
                     Builder::new()
                         .with_fonts([
-                            FontData.fallback_font().expect("fallback"),
-                            FontData.fallback_emoji_font().expect("emoji"),
+                            fallback_font().expect("fallback"),
+                            fallback_emoji_font().expect("emoji"),
                         ])
                         .with_backends(Backends::from_comma_list("vulkan"))
                         .with_width_and_height(size.width, size.height)

@@ -11,11 +11,11 @@ use winit::event::WindowEvent;
 use winit::event_loop::EventLoop;
 use winit::window::Window;
 use winit::window::WindowAttributes;
-use rat_wgpu::font::FontData;
+use rat_wgpu::font::{fallback_emoji_font, fallback_font};
 
 pub struct App {
     window: Option<Arc<Window>>,
-    backend: Option<Terminal<WgpuBackend<'static, 'static>>>,
+    backend: Option<Terminal<WgpuBackend<'static>>>,
 }
 
 #[repr(C)]
@@ -64,8 +64,8 @@ impl ApplicationHandler for App {
                 futures_lite::future::block_on(
                     Builder::new_with_postprocessor(PipelineBuilder::default())
                         .with_fonts([
-                            FontData.fallback_font().expect("fallback"),
-                            FontData.fallback_emoji_font().expect("emoji"),
+                            fallback_font().expect("fallback"),
+                            fallback_emoji_font().expect("emoji"),
                         ])
                         .with_backends(Backends::from_comma_list("vulkan"))
                         .with_width_and_height(size.width, size.height)
@@ -176,7 +176,7 @@ impl PostProcessorBuilder for PipelineBuilder {
 
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&layout],
+            bind_group_layouts: &[Some(&layout)],
             immediate_size: 0,
         });
 
