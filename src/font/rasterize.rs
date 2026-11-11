@@ -1,3 +1,5 @@
+/// Font rasterize.
+
 use crate::font::outline::{Outline, Painter};
 use crate::text_atlas::{CacheRect, Entry};
 use bitvec::order::Lsb0;
@@ -8,6 +10,7 @@ use rustybuzz::ttf_parser::{
 };
 use unicode_properties::GeneralCategory;
 
+/// Create the rasterized image for the glyph. 
 pub(crate) fn rasterize_glyph(
     cached: Entry,
     face: &rustybuzz::Face,

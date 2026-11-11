@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, OnceLock, RwLock};
 
-/// A Font which can be used for rendering.
+/// Font data.
 pub struct Font {
     font: fontdb::ID,
     face_data: Arc<dyn AsRef<[u8]>>,
@@ -127,14 +127,17 @@ impl Font {
         })
     }
 
+    /// Font ID
     pub fn id(&self) -> fontdb::ID {
         self.font
     }
 
+    /// Font name
     pub fn face_name(&self) -> &str {
         self.face_name.as_ref()
     }
 
+    /// Creates a rustybuzz::Face for the font-data.
     pub fn as_face<'a>(&'a self) -> Face<'a> {
         Face::from_slice((*self.face_data).as_ref(), self.face_idx).expect("font-face")
     }
@@ -159,6 +162,11 @@ impl Font {
         self.fallback = fallback;
     }
 
+    /// Is there a glyph for the given character.
+    ///
+    /// __Note__
+    ///
+    /// Caches the answer.
     pub(crate) fn have_glyph(&self, ch: char) -> bool {
         {
             let glyph_index = self.glyph_id.borrow();
@@ -177,6 +185,11 @@ impl Font {
         }
     }
 
+    /// Get the horizontal advance for the given glyph.
+    ///
+    /// __Note__
+    ///
+    /// Caches the answer.
     pub(crate) fn glyph_hor_advance(&self, glyph_id: GlyphId) -> Option<u16> {
         {
             let glyph_hor_advance = self.glyph_hor_advance.borrow();
@@ -274,6 +287,8 @@ impl Font {
         Some(scale)
     }
 
+    /// Returns the underline metrics for the parameters.
+    /// Gives to y coordinates for start and end of the underline.
     pub(crate) fn underline_metrics(&self, ascender: u32, box_height_px: u32) -> (u32, u32) {
         let font_ascender = self.ascender as f32;
         let underline_position = self
@@ -308,6 +323,8 @@ impl Font {
         }
     }
 
+    /// Returns the strikeout metrics for the parameters.
+    /// Gives to y coordinates for start and end of the strikeout.
     pub(crate) fn strikeout_metrics(&self, ascender: u32) -> (u32, u32) {
         let font_ascender = self.ascender as f32;
 
@@ -446,7 +463,7 @@ pub fn fallback_symbol_font() -> Option<Font> {
 }
 
 /// Gets an instance of the fontdb.
-/// This loads the installed system fonts on init.
+/// This loads the installed system fonts with the first call.
 pub fn font_db() -> &'static RwLock<fontdb::Database> {
     FONTDB.get_or_init(|| {
         let mut font_db = fontdb::Database::new();
@@ -495,6 +512,26 @@ pub fn installed_mono_fonts() -> Vec<String> {
     }
 
     fonts
+}
+
+/// Load the fonts for the given font family.
+pub fn load_font_by_family(family: &str) -> Vec<Font> {
+    let font_ids = {
+        let font_db = font_db().read().expect("font-db");
+        font_db
+            .faces()
+            .filter_map(|info| {
+                for (v, _) in &info.families {
+                    if v.as_str() == family {
+                        return Some(info.id);
+                    }
+                }
+                None
+            })
+            .collect::<Vec<_>>()
+    };
+
+    font_ids.into_iter().filter_map(|v| Font::new(v)).collect()
 }
 
 /// Load a specific font by exact name.

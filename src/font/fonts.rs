@@ -144,10 +144,12 @@ impl Fonts {
         }
     }
 
+    /// Rendering keeps a number of shape_plans.
     pub(crate) fn shape_plan_count(&self) -> usize {
         1 + self.bold.len() + self.italic.len() + self.bold_italic.len() + self.regular.len()
     }
 
+    /// Get the font.
     pub(crate) fn get_by_id(&self, id: fontdb::ID) -> &Font {
         self.regular
             .iter()
@@ -159,10 +161,13 @@ impl Fonts {
             .expect("font")
     }
 
+    /// Find a default font.
     pub(crate) fn default_font_for_cell(&self) -> fontdb::ID {
         self.select_font(" ", self.regular.iter().chain(self.fallback.iter()))
     }
 
+    /// Find a font for the given Cell.
+    /// Uses the modifiers and the stored glyph.
     pub(crate) fn font_for_cell(&self, cell: &Cell) -> fontdb::ID {
         if cell.modifier.contains(Modifier::BOLD | Modifier::ITALIC) {
             self.select_font(
@@ -198,6 +203,8 @@ impl Fonts {
         }
     }
 
+    /// Select the font with the best fit for the given
+    /// text cluster.
     fn select_font<'a>(
         &'a self,
         cluster: &str,

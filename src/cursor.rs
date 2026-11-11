@@ -1,3 +1,7 @@
+//! 
+//! Cursor styling and blink control.
+//! 
+
 use std::ops::{BitAnd, BitOr};
 
 /// Cursor-styles.
@@ -14,6 +18,11 @@ pub enum CursorStyle {
 }
 
 impl CursorStyle {
+    /// Switches to the matching LTR cursor. 
+    /// 
+    /// When using a bar-cursor it needs to appear on the left or
+    /// the right edge of the cellbox dependent on the writing direction.
+    /// Other cursor types are not changed.
     pub(crate) fn to_ltr(self) -> CursorStyle {
         match self {
             CursorStyle::RtlBar => CursorStyle::Bar,
@@ -22,6 +31,11 @@ impl CursorStyle {
         }
     }
 
+    /// Switches to the matching RTL cursor. 
+    ///
+    /// When using a bar-cursor it needs to appear on the left or
+    /// the right edge of the cellbox dependent on the writing direction.
+    /// Other cursor types are not changed.
     pub(crate) fn to_rtl(self) -> CursorStyle {
         match self {
             CursorStyle::Bar => CursorStyle::RtlBar,
@@ -31,12 +45,18 @@ impl CursorStyle {
     }
 }
 
+/// Flag for [Backend::blink].
+/// 
+/// This determines which blink-counter is increased when
+/// calling blink to trigger the blinking effect.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct Blinking(u8);
 
 impl Blinking {
+    /// Blink only the Cursor.
     pub const CURSOR: Blinking = Blinking(1);
+    /// Blink only blinking text.
     pub const TEXT: Blinking = Blinking(2);
 }
 

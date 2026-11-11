@@ -1,7 +1,14 @@
+//! Converts from ratatui-Color to an actual RGB value.
+//!
+//! You can define the effective colors for `Color::Black .. Color::White`.
+//! Color::Indexed uses a predefined palette and can not be changed.
+//! Color::Rgb is taken as is.
+//!
 use ratatui_core::style::Color;
 
 pub(crate) type Rgb = [u8; 3];
 
+/// A color-table for the base-16 colors.
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
 pub struct ColorTable {
@@ -24,6 +31,7 @@ pub struct ColorTable {
 }
 
 impl ColorTable {
+    /// Convert ratatui Color to a RGB value.
     pub(crate) fn c2c(&self, color: Color, reset: Rgb) -> Rgb {
         match color {
             Color::Reset => reset,
