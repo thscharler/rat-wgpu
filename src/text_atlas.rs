@@ -9,7 +9,7 @@ pub(crate) struct Key {
     pub(crate) style: Modifier,
     pub(crate) glyph: u32,
     pub(crate) width: u8,
-    pub(crate) font: u64,
+    pub(crate) font: fontdb::ID,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

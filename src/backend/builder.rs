@@ -8,7 +8,7 @@ use crate::backend::{
 };
 use crate::colors::ColorTable;
 use crate::cursor::CursorStyle;
-use crate::font::{Font, FontData, Fonts};
+use crate::font::{Font, Fonts, fallback_emoji_font, fallback_font, fallback_symbol_font};
 use crate::image::{ImageBuffer, ImageFrame};
 use crate::postprocessor::PostProcessorBuilder;
 use crate::postprocessor::default::DefaultPostProcessorBuilder;
@@ -35,9 +35,9 @@ use wgpu::{
 const CACHE_WIDTH: u32 = 1800;
 const CACHE_HEIGHT: u32 = 1200;
 
-pub struct Builder<'a, P = DefaultPostProcessorBuilder> {
+pub struct Builder<P = DefaultPostProcessorBuilder> {
     postprocessor: P,
-    fonts: Option<Fonts<'a>>,
+    fonts: Option<Fonts>,
     backends: Backends,
     instance: Option<Instance>,
     limits: Option<Limits>,
@@ -54,7 +54,7 @@ pub struct Builder<'a, P = DefaultPostProcessorBuilder> {
     cursor_color: Color,
 }
 
-impl<'a, P> Default for Builder<'a, P>
+impl<P> Default for Builder<P>
 where
     P: PostProcessorBuilder + Default,
 {
@@ -80,13 +80,13 @@ where
     }
 }
 
-impl<'a> Builder<'a, DefaultPostProcessorBuilder> {
+impl Builder<DefaultPostProcessorBuilder> {
     pub fn new() -> Self {
         Self::default()
     }
 }
 
-impl<'a, P> Builder<'a, P>
+impl<P> Builder<P>
 where
     P: PostProcessorBuilder + Default,
 {
@@ -98,7 +98,7 @@ where
     }
 
     ///
-    pub fn with_fallback_fonts(mut self, fonts: Fonts<'a>) -> Self {
+    pub fn with_fallback_fonts(mut self, fonts: Fonts) -> Self {
         self.fonts = Some(fonts);
         self
     }
@@ -123,13 +123,13 @@ where
         }
 
         let mut fallback = Vec::new();
-        if let Some(f) = FontData.fallback_font() {
+        if let Some(f) = fallback_font() {
             fallback.push(f);
         }
-        if let Some(f) = FontData.fallback_symbol_font() {
+        if let Some(f) = fallback_symbol_font() {
             fallback.push(f);
         }
-        if let Some(f) = FontData.fallback_emoji_font() {
+        if let Some(f) = fallback_emoji_font() {
             fallback.push(f)
         }
 
@@ -162,7 +162,7 @@ where
     /// remain unchanged.
     ///
     /// See also [`Fonts::add_fonts`].
-    pub fn with_fonts<I: IntoIterator<Item = Font<'a>>>(mut self, fonts: I) -> Self {
+    pub fn with_fonts<I: IntoIterator<Item = Font>>(mut self, fonts: I) -> Self {
         self.init_fallback_fonts();
         self.fonts.as_mut().expect("fonts").add_fonts(fonts);
         self
@@ -173,7 +173,7 @@ where
     ///
     /// See also [`Fonts::add_regular_fonts`].
     #[must_use]
-    pub fn with_regular_fonts<I: IntoIterator<Item = Font<'a>>>(mut self, fonts: I) -> Self {
+    pub fn with_regular_fonts<I: IntoIterator<Item = Font>>(mut self, fonts: I) -> Self {
         self.init_fallback_fonts();
         self.fonts.as_mut().expect("fonts").add_regular_fonts(fonts);
         self
@@ -184,7 +184,7 @@ where
     ///
     /// See also [`Fonts::add_bold_fonts`].
     #[must_use]
-    pub fn with_bold_fonts<I: IntoIterator<Item = Font<'a>>>(mut self, fonts: I) -> Self {
+    pub fn with_bold_fonts<I: IntoIterator<Item = Font>>(mut self, fonts: I) -> Self {
         self.init_fallback_fonts();
         self.fonts.as_mut().expect("fonts").add_bold_fonts(fonts);
         self
@@ -195,7 +195,7 @@ where
     ///
     /// See also [`Fonts::add_italic_fonts`].
     #[must_use]
-    pub fn with_italic_fonts<I: IntoIterator<Item = Font<'a>>>(mut self, fonts: I) -> Self {
+    pub fn with_italic_fonts<I: IntoIterator<Item = Font>>(mut self, fonts: I) -> Self {
         self.init_fallback_fonts();
         self.fonts.as_mut().expect("fonts").add_italic_fonts(fonts);
         self
@@ -206,7 +206,7 @@ where
     ///
     /// See also [`Fonts::add_bold_italic_fonts`].
     #[must_use]
-    pub fn with_bold_italic_fonts<I: IntoIterator<Item = Font<'a>>>(mut self, fonts: I) -> Self {
+    pub fn with_bold_italic_fonts<I: IntoIterator<Item = Font>>(mut self, fonts: I) -> Self {
         self.init_fallback_fonts();
         self.fonts
             .as_mut()
@@ -318,7 +318,7 @@ where
     }
 }
 
-impl<'a, P> Builder<'a, P>
+impl<P> Builder<P>
 where
     P: PostProcessorBuilder,
 {
@@ -327,7 +327,7 @@ where
     pub async fn build_with_target<'s>(
         mut self,
         target: impl Into<SurfaceTarget<'s>>,
-    ) -> Result<WgpuBackend<'a, 's>, Error> {
+    ) -> Result<WgpuBackend<'s>, Error> {
         let instance = self.instance.get_or_insert_with(|| {
             Instance::new(InstanceDescriptor {
                 backends: self.backends,
@@ -353,12 +353,12 @@ where
     pub async fn build_with_surface<'s>(
         self,
         surface: Surface<'s>,
-    ) -> Result<WgpuBackend<'a, 's>, Error> {
+    ) -> Result<WgpuBackend<'s>, Error> {
         self.build_with_render_surface(RenderSurface::new_surface(surface))
             .await
     }
 
-    pub async fn build_headless(self) -> Result<WgpuBackend<'a, 'static>, Error> {
+    pub async fn build_headless(self) -> Result<WgpuBackend<'static>, Error> {
         self.build_with_render_surface(RenderSurface::new_headless())
             .await
     }
@@ -366,7 +366,7 @@ where
     pub async fn build_headless_with_format(
         self,
         format: TextureFormat,
-    ) -> Result<WgpuBackend<'a, 'static>, Error> {
+    ) -> Result<WgpuBackend<'static>, Error> {
         self.build_with_render_surface(RenderSurface::new_headless_with_format(format))
             .await
     }
@@ -374,7 +374,7 @@ where
     async fn build_with_render_surface<'s>(
         mut self,
         mut surface: RenderSurface<'s>,
-    ) -> Result<WgpuBackend<'a, 's>, Error> {
+    ) -> Result<WgpuBackend<'s>, Error> {
         let instance = self.instance.get_or_insert_with(|| {
             Instance::new(InstanceDescriptor {
                 backends: self.backends,

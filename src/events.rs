@@ -16,11 +16,11 @@ pub trait ConvertEvent<Event> {
     fn set_window_size(
         &mut self,
         window_size: ratatui_core::backend::WindowSize,
-        backend: &WgpuBackend<'_, '_>,
+        backend: &WgpuBackend<'_>,
     );
 
     /// Update some states.
-    fn update_state(&mut self, event: &winit::event::WindowEvent, backend: &WgpuBackend<'_, '_>);
+    fn update_state(&mut self, event: &winit::event::WindowEvent, backend: &WgpuBackend<'_>);
 
     /// Query the current state.
     fn state(&self) -> &WinitEventState;
@@ -128,7 +128,7 @@ impl WinitEventState {
     pub fn set_window_size(
         &mut self,
         window_size: ratatui_core::backend::WindowSize,
-        backend: &WgpuBackend<'_, '_>,
+        backend: &WgpuBackend<'_>,
     ) {
         self.window_size = window_size.columns_rows;
         self.window_size_px = window_size.pixels;
@@ -237,7 +237,7 @@ impl WinitEventState {
     pub(crate) fn update_state(
         &mut self,
         event: &winit::event::WindowEvent,
-        backend: &WgpuBackend<'_, '_>,
+        backend: &WgpuBackend<'_>,
     ) {
         match event {
             winit::event::WindowEvent::ModifiersChanged(modifiers) => {

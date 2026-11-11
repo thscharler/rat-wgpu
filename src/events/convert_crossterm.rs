@@ -1,5 +1,5 @@
-use crate::events::{CompositeWinitEvent, ConvertEvent, WinitEventState};
 use crate::WgpuBackend;
+use crate::events::{CompositeWinitEvent, ConvertEvent, WinitEventState};
 
 /// Convert winit-events to crossterm-events.
 ///
@@ -71,12 +71,12 @@ where
     fn set_window_size(
         &mut self,
         window_size: ratatui_core::backend::WindowSize,
-        backend: &WgpuBackend<'_, '_>,
+        backend: &WgpuBackend<'_>,
     ) {
         self.state.set_window_size(window_size, backend);
     }
 
-    fn update_state(&mut self, event: &winit::event::WindowEvent, backend: &WgpuBackend<'_, '_>) {
+    fn update_state(&mut self, event: &winit::event::WindowEvent, backend: &WgpuBackend<'_>) {
         self.state.update_state(event, backend)
     }
 
@@ -107,12 +107,12 @@ where
     fn set_window_size(
         &mut self,
         window_size: ratatui_core::backend::WindowSize,
-        backend: &WgpuBackend<'_, '_>,
+        backend: &WgpuBackend<'_>,
     ) {
         self.state.set_window_size(window_size, backend);
     }
 
-    fn update_state(&mut self, event: &winit::event::WindowEvent, backend: &WgpuBackend<'_, '_>) {
+    fn update_state(&mut self, event: &winit::event::WindowEvent, backend: &WgpuBackend<'_>) {
         self.state.update_state(event, backend)
     }
 
@@ -131,7 +131,7 @@ where
                     event: w_event,
                     state: self.state.clone(),
                 }
-                    .into(),
+                .into(),
             )
         }
     }
@@ -159,13 +159,13 @@ fn to_crossterm_event(
             }
             winit::event::WindowEvent::KeyboardInput {
                 event:
-                winit::event::KeyEvent {
-                    logical_key,
-                    location,
-                    state: element_state,
-                    repeat,
-                    ..
-                },
+                    winit::event::KeyEvent {
+                        logical_key,
+                        location,
+                        state: element_state,
+                        repeat,
+                        ..
+                    },
                 ..
             } => {
                 let ct_key_modifiers = map_modifiers(state);

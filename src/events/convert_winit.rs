@@ -15,12 +15,12 @@ where
     fn set_window_size(
         &mut self,
         window_size: ratatui_core::backend::WindowSize,
-        backend: &WgpuBackend<'_, '_>,
+        backend: &WgpuBackend<'_>,
     ) {
         self.state.set_window_size(window_size, backend);
     }
 
-    fn update_state(&mut self, event: &winit::event::WindowEvent, backend: &WgpuBackend<'_, '_>) {
+    fn update_state(&mut self, event: &winit::event::WindowEvent, backend: &WgpuBackend<'_>) {
         self.state.update_state(event, backend)
     }
 

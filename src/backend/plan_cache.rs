@@ -5,7 +5,7 @@ use std::num::NonZeroUsize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Key {
-    face_id: u64,
+    face_id: fontdb::ID,
     direction: Direction,
     script: Script,
 }
@@ -21,7 +21,12 @@ impl PlanCache {
         }
     }
 
-    pub(crate) fn get(&mut self, id: u64, font: &Font, buffer: &mut UnicodeBuffer) -> &ShapePlan {
+    pub(crate) fn get(
+        &mut self,
+        id: fontdb::ID,
+        font: &Font,
+        buffer: &mut UnicodeBuffer,
+    ) -> &ShapePlan {
         buffer.guess_segment_properties();
         let key = Key {
             face_id: id,
@@ -31,7 +36,7 @@ impl PlanCache {
 
         let (v, _) = self.lru.get_or_insert_with(key, |_| {
             ShapePlan::new(
-                font.face(),
+                &font.as_face(), // todo: ?? why does this work
                 buffer.direction(),
                 Some(buffer.script()),
                 buffer.language().as_ref(),

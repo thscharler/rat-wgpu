@@ -4,30 +4,24 @@ use log::warn;
 use ratatui_core::buffer::Cell;
 use ratatui_core::style::Modifier;
 
-/// A collection of fonts to use for rendering. Supports font fallback.
-///
-/// It is recommended, but not required, that all fonts have the same/very
-/// similar aspect ratio, or you may get unexpected results during rendering due
-/// to fallback.
-pub struct Fonts<'a> {
+/// A collection of fonts to use for rendering.
+/// Supports font fallback.
+pub struct Fonts {
     width_px: u32,
     height_px: u32,
     ascender: u32,
 
     em_advance: f32,
 
-    fallback: Vec<Font<'a>>,
+    fallback: Vec<Font>,
 
-    regular: Vec<Font<'a>>,
-    bold: Vec<Font<'a>>,
-    italic: Vec<Font<'a>>,
-    bold_italic: Vec<Font<'a>>,
-
-    // give an id in insertion order.
-    id_count: u64,
+    regular: Vec<Font>,
+    bold: Vec<Font>,
+    italic: Vec<Font>,
+    bold_italic: Vec<Font>,
 }
 
-impl<'a> Fonts<'a> {
+impl Fonts {
     /// Create a new, empty set of fonts. The provided font will be used as a
     /// last-resort fallback if no other fonts can render a particular
     /// character. Rendering will attempt to fake bold/italic styles using this
@@ -35,23 +29,21 @@ impl<'a> Fonts<'a> {
     ///
     /// The provided size_px will be the rendered height in pixels of all fonts
     /// in this collection.
-    pub fn new(mut font: Font<'a>, size_px: u32) -> Self {
-        font.set_height_px(size_px);
-        font.set_width_px(font.base_width_px());
-        font.set_fallback(true);
-        font.set_id(0);
+    pub fn new(mut fallback: Font, size_px: u32) -> Self {
+        fallback.set_height_px(size_px);
+        fallback.set_width_px(fallback.base_width_px());
+        fallback.set_fallback(true);
 
         Self {
-            width_px: font.base_width_px(),
+            width_px: fallback.base_width_px(),
             height_px: size_px,
-            ascender: font.ascender(),
-            em_advance: font.em_advance(),
-            fallback: vec![font],
+            ascender: fallback.ascender(),
+            em_advance: fallback.em_advance(),
+            fallback: vec![fallback],
             regular: vec![],
             bold: vec![],
             italic: vec![],
             bold_italic: vec![],
-            id_count: 1,
         }
     }
 
@@ -65,26 +57,23 @@ impl<'a> Fonts<'a> {
     ///
     /// The provided size_px will be the rendered height in pixels of all fonts
     /// in this collection.
-    pub fn new_vec(mut fonts: Vec<Font<'a>>, size_px: u32) -> Self {
-        fonts.iter_mut().enumerate().for_each(|(n, f)| {
+    pub fn new_vec(mut fonts: Vec<Font>, size_px: u32) -> Self {
+        fonts.iter_mut().enumerate().for_each(|(_, f)| {
             f.set_height_px(size_px);
             f.set_width_px(f.base_width_px());
             f.set_fallback(true);
-            f.set_id(n as u64);
         });
-        let id_count = fonts.len() as u64;
 
         Self {
             width_px: size_px / 2, // rough estimate
             height_px: size_px,
-            ascender: size_px * 4 / 5,         // rough estimate
+            ascender: size_px * 4 / 5,        // rough estimate
             em_advance: size_px as f32 / 2.0, // rough estimate
             fallback: fonts,
             regular: vec![],
             bold: vec![],
             italic: vec![],
             bold_italic: vec![],
-            id_count,
         }
     }
 
@@ -175,19 +164,16 @@ impl<'a> Fonts<'a> {
     ///
     /// Adding more fonts will not have any effect, if the text can be rendered
     /// with a prior font.
-    pub fn add_fonts(&mut self, fonts: impl IntoIterator<Item = Font<'a>>) {
-        for mut font in fonts {
-            font.set_id(self.id_count);
-            self.id_count += 1;
-
-            if !font.face().is_monospaced() {
+    pub fn add_fonts(&mut self, fonts: impl IntoIterator<Item = Font>) {
+        for font in fonts {
+            if !font.is_monospaced() {
                 warn!("Non monospace font used in add_fonts, this may cause unexpected rendering.");
             }
-            if font.face().is_italic() && font.face().is_bold() {
+            if font.is_italic() && font.is_bold() {
                 self.bold_italic.push(font);
-            } else if font.face().is_italic() {
+            } else if font.is_italic() {
                 self.italic.push(font);
-            } else if font.face().is_bold() {
+            } else if font.is_bold() {
                 self.bold.push(font);
             } else {
                 self.regular.push(font);
@@ -198,10 +184,8 @@ impl<'a> Fonts<'a> {
 
     /// Add a new collection of fonts for regular styled text. These fonts will
     /// come _after_ previously provided fonts in the fallback order.
-    pub fn add_regular_fonts(&mut self, fonts: impl IntoIterator<Item = Font<'a>>) {
-        for mut font in fonts {
-            font.set_id(self.id_count);
-            self.id_count += 1;
+    pub fn add_regular_fonts(&mut self, fonts: impl IntoIterator<Item = Font>) {
+        for font in fonts {
             self.regular.push(font);
         }
         self.set_height_px(self.height_px);
@@ -211,12 +195,10 @@ impl<'a> Fonts<'a> {
     /// come _after_ previously provided fonts in the fallback order.
     ///
     /// You do not have to provide these for bold text to be supported. If no
-    /// bold fonts are supplied, rendering will fallback to the regular fonts
+    /// bold fonts are supplied, rendering will fall back to the regular fonts
     /// with fake bolding.
-    pub fn add_bold_fonts(&mut self, fonts: impl IntoIterator<Item = Font<'a>>) {
-        for mut font in fonts {
-            font.set_id(self.id_count);
-            self.id_count += 1;
+    pub fn add_bold_fonts(&mut self, fonts: impl IntoIterator<Item = Font>) {
+        for font in fonts {
             self.bold.push(font);
         }
         self.set_height_px(self.height_px);
@@ -227,12 +209,10 @@ impl<'a> Fonts<'a> {
     ///
     /// It is recommended, but not required, that you provide italic fonts if
     /// your application intends to make use of italics. If no italic fonts
-    /// are supplied, rendering will fallback to the regular fonts with fake
+    /// are supplied, rendering will fall back to the regular fonts with fake
     /// italics.
-    pub fn add_italic_fonts(&mut self, fonts: impl IntoIterator<Item = Font<'a>>) {
-        for mut font in fonts {
-            font.set_id(self.id_count);
-            self.id_count += 1;
+    pub fn add_italic_fonts(&mut self, fonts: impl IntoIterator<Item = Font>) {
+        for font in fonts {
             self.italic.push(font);
         }
         self.set_height_px(self.height_px);
@@ -242,12 +222,10 @@ impl<'a> Fonts<'a> {
     /// will come _after_ previously provided fonts in the fallback order.
     ///
     /// You do not have to provide these for bold text to be supported. If no
-    /// bold fonts are supplied, rendering will fallback to the italic fonts
+    /// bold fonts are supplied, rendering will fall back to the italic fonts
     /// with fake bolding.
-    pub fn add_bold_italic_fonts(&mut self, fonts: impl IntoIterator<Item = Font<'a>>) {
-        for mut font in fonts {
-            font.set_id(self.id_count);
-            self.id_count += 1;
+    pub fn add_bold_italic_fonts(&mut self, fonts: impl IntoIterator<Item = Font>) {
+        for font in fonts {
             self.bold_italic.push(font);
         }
         self.set_height_px(self.height_px);
@@ -262,12 +240,11 @@ impl<'a> Fonts<'a> {
         }
     }
 
-
     pub(crate) fn count(&self) -> usize {
         1 + self.bold.len() + self.italic.len() + self.bold_italic.len() + self.regular.len()
     }
 
-    pub(crate) fn get_by_id(&'a self, id: u64) -> &'a Font<'a> {
+    pub(crate) fn get_by_id(&self, id: fontdb::ID) -> &Font {
         self.regular
             .iter()
             .chain(self.bold.iter())
@@ -278,7 +255,7 @@ impl<'a> Fonts<'a> {
             .expect("font")
     }
 
-    pub(crate) fn font_for_cell(&'_ self, cell: &Cell) -> u64 {
+    pub(crate) fn font_for_cell(&'_ self, cell: &Cell) -> fontdb::ID {
         if cell.modifier.contains(Modifier::BOLD | Modifier::ITALIC) {
             self.select_font(
                 cell.symbol(),
@@ -319,11 +296,11 @@ impl<'a> Fonts<'a> {
         }
     }
 
-    fn select_font<'fonts>(
-        &'fonts self,
+    fn select_font<'a>(
+        &'a self,
         cluster: &str,
-        fonts: impl IntoIterator<Item = &'fonts Font<'a>>,
-    ) -> u64 {
+        fonts: impl IntoIterator<Item = &'a Font>,
+    ) -> fontdb::ID {
         let mut max = 0;
         let mut font = None;
         let mut last_resort = None;
@@ -337,7 +314,7 @@ impl<'a> Fonts<'a> {
                     .chars()
                     .enumerate()
                     .fold((0, 0), |(mut count, _), (idx, ch)| {
-                        count += usize::from(candidate.face().glyph_index(ch).is_some());
+                        count += usize::from(candidate.have_glyph(ch));
                         (count, idx)
                     });
 

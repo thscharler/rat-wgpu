@@ -63,7 +63,7 @@ struct TuiSurface {
     // cell data
     cells: Vec<Cell>,
     // font detection
-    cell_font: Vec<u64>,
+    cell_font: Vec<fontdb::ID>,
     // bidi can reorder cells in a row.
     // points to the cell with the actual cell-data.
     cell_remap: Vec<u16>,

@@ -21,7 +21,7 @@ use ratatui_core::backend::{Backend, ClearType, WindowSize};
 use ratatui_core::buffer::{Cell, CellDiffOption};
 use ratatui_core::style::Modifier;
 use rustybuzz::ttf_parser::GlyphId;
-use rustybuzz::{GlyphBuffer, UnicodeBuffer, shape_with_plan};
+use rustybuzz::{Face, GlyphBuffer, UnicodeBuffer, shape_with_plan};
 use std::mem;
 use std::num::NonZeroU64;
 use std::sync::{Arc, Mutex};
@@ -50,9 +50,9 @@ use wgpu::{
 /// - The cursor is tracked but not rendered.
 /// - No builtin accessibilty, although [`WgpuBackend::get_text`] is provided to
 ///   access the screen's contents.
-pub struct WgpuBackend<'f, 's> {
+pub struct WgpuBackend<'s> {
     // active fonts
-    pub(super) fonts: Fonts<'f>,
+    pub(super) fonts: Fonts,
 
     // ratatui state
     pub(super) tui_surface: TuiSurface,
@@ -75,7 +75,7 @@ pub struct WgpuBackend<'f, 's> {
     pub(super) wgpu_pipeline: WgpuPipeline,
 }
 
-impl<'s> Backend for WgpuBackend<'_, 's> {
+impl<'s> Backend for WgpuBackend<'s> {
     type Error = std::io::Error;
 
     fn draw<'a, I>(&mut self, mut content: I) -> std::io::Result<()>
@@ -181,7 +181,7 @@ impl<'s> Backend for WgpuBackend<'_, 's> {
             }
             ClearType::BeforeCursor => {
                 self.tui_surface.cells[..idx].fill(Cell::EMPTY);
-                self.tui_surface.cell_font[..idx].fill(0);
+                self.tui_surface.cell_font[..idx].fill(fontdb::ID::default());
                 self.tui_surface.cell_remap[..idx].fill(0);
                 self.tui_surface.dirty_rows[..=self.tui_surface.cursor.1 as usize].fill(true);
                 self.tui_surface.dirty_cells[..idx].fill(true);
@@ -192,7 +192,8 @@ impl<'s> Backend for WgpuBackend<'_, 's> {
             ClearType::CurrentLine => {
                 self.tui_surface.cells[line_start..line_start + bounds.width as usize]
                     .fill(Cell::EMPTY);
-                self.tui_surface.cell_font[line_start..line_start + bounds.width as usize].fill(0);
+                self.tui_surface.cell_font[line_start..line_start + bounds.width as usize]
+                    .fill(fontdb::ID::default());
                 self.tui_surface.cell_remap[line_start..line_start + bounds.width as usize].fill(0);
                 self.tui_surface
                     .dirty_rows
@@ -208,7 +209,7 @@ impl<'s> Backend for WgpuBackend<'_, 's> {
             ClearType::UntilNewLine => {
                 let remain = (bounds.width - self.tui_surface.cursor.0) as usize;
                 self.tui_surface.cells[idx..idx + remain].fill(Cell::EMPTY);
-                self.tui_surface.cell_font[idx..idx + remain].fill(0);
+                self.tui_surface.cell_font[idx..idx + remain].fill(fontdb::ID::default());
                 self.tui_surface.cell_remap[idx..idx + remain].fill(0);
                 self.tui_surface
                     .dirty_rows
@@ -290,7 +291,7 @@ impl<'s> Backend for WgpuBackend<'_, 's> {
     }
 }
 
-impl<'f, 's> WgpuBackend<'f, 's> {
+impl<'s> WgpuBackend<'s> {
     /// Returns the ImageFrame.
     ///
     /// This will be used by the application to queue images for rendering.
@@ -445,7 +446,7 @@ impl<'f, 's> WgpuBackend<'f, 's> {
     ///
     /// This will also change the number of cells if the font has a different
     /// aspect ratio for its glyphs.
-    pub fn update_fonts(&mut self, new_fonts: Fonts<'f>) {
+    pub fn update_fonts(&mut self, new_fonts: Fonts) {
         self.fonts = new_fonts;
 
         rebuild_surface(
@@ -464,7 +465,7 @@ impl<'f, 's> WgpuBackend<'f, 's> {
     /// This will cause a full repaint of the screen the next
     /// time [`WgpuBackend::flush`] is called.
     /// A call to [ratatui_core::terminal::Terminal::draw] will do this.
-    pub fn update_font_vec(&mut self, new_fonts: Vec<Font<'f>>) {
+    pub fn update_font_vec(&mut self, new_fonts: Vec<Font>) {
         self.fonts.clear_fonts();
         self.fonts.add_fonts(new_fonts);
 
@@ -957,9 +958,10 @@ fn draw_tui(
     tui_surface
         .cells
         .resize(bounds.height as usize * bounds.width as usize, Cell::EMPTY);
-    tui_surface
-        .cell_font
-        .resize(bounds.height as usize * bounds.width as usize, 0);
+    tui_surface.cell_font.resize(
+        bounds.height as usize * bounds.width as usize,
+        fontdb::ID::default(),
+    );
     tui_surface
         .cell_remap
         .resize(bounds.height as usize * bounds.width as usize, 0);
@@ -1120,7 +1122,7 @@ fn draw_tui(
 
 fn flush_tui(
     bounds: ratatui_core::layout::Size,
-    fonts: &Fonts<'_>,
+    fonts: &Fonts,
     tui_surface: &mut TuiSurface,
     rendered: &mut Vec<Rendered>,
     wgpu_atlas: &mut WgpuAtlas,
@@ -1209,6 +1211,7 @@ fn flush_tui(
                 {
                     let mut buffer = mem::take(tmp_buffer);
                     let current_font = fonts.get_by_id(current_font_id);
+                    let current_face = current_font.as_face();
 
                     *tmp_buffer = shape(
                         row_idx,
@@ -1218,13 +1221,13 @@ fn flush_tui(
                         &tmp_rowbuf,
                         &tmp_rowbuf_to_cell,
                         shape_with_plan(
-                            current_font.face(),
+                            &current_face,
                             tmp_plan_cache.get(current_font_id, current_font, &mut buffer),
                             buffer,
                         ),
-                        current_font_id,
-                        fonts.cell_box(),
                         current_font,
+                        &current_face,
+                        fonts.cell_box(),
                         tui_surface.cursor_visible,
                         tui_surface.cursor,
                         &mut rendered[row_offset..row_offset + bounds.width as usize],
@@ -1280,6 +1283,7 @@ fn flush_tui(
         if let Some(current_font_id) = current_font_id {
             let mut buffer = mem::take(tmp_buffer);
             let current_font = fonts.get_by_id(current_font_id);
+            let current_face = current_font.as_face();
             *tmp_buffer = shape(
                 row_idx,
                 row_cells,
@@ -1288,13 +1292,13 @@ fn flush_tui(
                 &tmp_rowbuf,
                 tmp_rowbuf_to_cell,
                 shape_with_plan(
-                    current_font.face(),
+                    &current_face,
                     tmp_plan_cache.get(current_font_id, current_font, &mut buffer),
                     buffer,
                 ),
-                current_font_id,
-                fonts.cell_box(),
                 current_font,
+                &current_face,
+                fonts.cell_box(),
                 tui_surface.cursor_visible,
                 tui_surface.cursor,
                 &mut rendered[row_offset..row_offset + bounds.width as usize],
@@ -1325,17 +1329,15 @@ fn shape(
     buf_str: &str,
     buf_to_cell: &[u16],
     buffer: GlyphBuffer,
-    font_id: u64,
+    font: &Font,
+    metrics: &Face<'_>,
     cell_box: CellBox,
-    font: &Font<'_>,
     cursor_visible: bool,
     cursor: (u16, u16),
     rendered: &mut [Rendered],
     wgpu_atlas: &mut WgpuAtlas,
     queue: &Queue,
 ) -> UnicodeBuffer {
-    let metrics = font.face();
-
     let mut x = 0;
     let mut default_chars_wide = 1;
     #[allow(unused_assignments)]
@@ -1389,7 +1391,11 @@ fn shape(
         }
 
         let block_char = (ch as u32) >= 0x2500 && (ch as u32) <= 0x259F;
-        let advance_scale = font.scale_x(info.glyph_id as u16, block_char, chars_wide as u32);
+        let Some(advance_scale) =
+            font.scale_x(GlyphId(info.glyph_id as u16), block_char, chars_wide as u32)
+        else {
+            continue;
+        };
         let advance_scale_y = font.scale_y(info.glyph_id as u16, block_char);
 
         let basey = row_idx as i32 * cell_box.height as i32
@@ -1424,7 +1430,7 @@ fn shape(
                 .intersection(Modifier::BOLD | Modifier::ITALIC),
             glyph: info.glyph_id,
             width: chars_wide as u8,
-            font: font_id,
+            font: font.id(),
         };
 
         let cached =
@@ -1483,7 +1489,7 @@ fn shape(
 
         let (cached, image) = rasterize_glyph(
             cached,
-            metrics,
+            &metrics,
             info,
             view_modifier.contains(Modifier::BOLD),
             view_modifier.contains(Modifier::ITALIC),
