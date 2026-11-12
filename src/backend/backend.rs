@@ -383,13 +383,13 @@ impl<'s> WgpuBackend<'s> {
     }
 
     /// Changes the post-processor.
-    pub fn update_post_processor<P: PostProcessorBuilder>(&mut self, builder: P) {
+    pub fn update_post_processor(&mut self, builder: &mut dyn PostProcessorBuilder) {
         let post_process = builder.compile(
             &self.wgpu_base.device,
             &self.wgpu_base.text_dest_view,
             &self.wgpu_base.surface_config,
         );
-        self.wgpu_post_process = Box::new(post_process);
+        self.wgpu_post_process = post_process;
     }
 
     /// Resize the rendering surface.

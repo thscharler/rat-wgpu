@@ -1,5 +1,6 @@
+use rat_wgpu::font::{CellBox, fallback_emoji_font, fallback_font};
 use rat_wgpu::postprocessor::{PostProcessor, PostProcessorBuilder};
-use rat_wgpu::{Builder, CellBox, WgpuBackend};
+use rat_wgpu::{Builder, WgpuBackend};
 use ratatui_core::terminal::Terminal;
 use ratatui_widgets::block::Block;
 use ratatui_widgets::paragraph::{Paragraph, Wrap};
@@ -11,7 +12,6 @@ use winit::event::WindowEvent;
 use winit::event_loop::EventLoop;
 use winit::window::Window;
 use winit::window::WindowAttributes;
-use rat_wgpu::font::{fallback_emoji_font, fallback_font};
 
 pub struct App {
     window: Option<Arc<Window>>,
@@ -62,7 +62,8 @@ impl ApplicationHandler for App {
         self.backend = Some(
             Terminal::new(
                 futures_lite::future::block_on(
-                    Builder::new_with_postprocessor(PipelineBuilder::default())
+                    Builder::new()
+                        .with_postprocessor(Box::new(PipelineBuilder::default()))
                         .with_fonts([
                             fallback_font().expect("fallback"),
                             fallback_emoji_font().expect("emoji"),
@@ -115,14 +116,12 @@ impl ApplicationHandler for App {
 }
 
 impl PostProcessorBuilder for PipelineBuilder {
-    type PostProcessor<'a> = Pipeline;
-
     fn compile(
-        self,
+        &mut self,
         device: &Device,
         text_view: &TextureView,
         surface_config: &SurfaceConfiguration,
-    ) -> Self::PostProcessor<'static> {
+    ) -> Box<dyn PostProcessor> {
         let uniforms = device.create_buffer(&BufferDescriptor {
             label: None,
             size: size_of::<Uniforms>() as u64,
@@ -219,13 +218,13 @@ impl PostProcessorBuilder for PipelineBuilder {
             &pipeline,
         );
 
-        Pipeline {
+        Box::new(Pipeline {
             uniforms,
             bindings: layout,
             sampler,
             pipeline,
             shader,
-        }
+        })
     }
 }
 

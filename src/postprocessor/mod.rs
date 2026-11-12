@@ -10,18 +10,15 @@ pub mod default;
 pub mod crt;
 
 pub trait PostProcessorBuilder {
-    /// Resulting postprocessor.
-    type PostProcessor<'a>: PostProcessor + 'a;
-
     /// Called during initialization of the backend. This should fully
     /// initialize the post processor for rendering. Note that you are expected
     /// to render to the final surface during [`PostProcessor::process`].
     fn compile(
-        self,
+        &mut self,
         device: &Device,
         text_view: &TextureView,
         surface_config: &SurfaceConfiguration,
-    ) -> Self::PostProcessor<'static>;
+    ) -> Box<dyn PostProcessor>;
 }
 
 /// A pipeline for post-processing rendered text.

@@ -8,7 +8,6 @@ readme = "readme.md"
 
 [features]
 default = ["winit-event", "fallback_font", "fallback_emoji_font", "fallback_symbol_font"]
-#default = ["fallback_font"]
 # Scale the resulting TUI to the exact window-size. Might look a bit stretched.
 scale_to_window = []
 # Add NotoSansMono-Regular as fallback font.

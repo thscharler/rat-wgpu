@@ -35,8 +35,8 @@ use wgpu::{
 const CACHE_WIDTH: u32 = 1800;
 const CACHE_HEIGHT: u32 = 1200;
 
-pub struct Builder<P = DefaultPostProcessorBuilder> {
-    postprocessor: P,
+pub struct Builder {
+    postprocessor: Box<dyn PostProcessorBuilder>,
     fonts: Fonts,
     backends: Backends,
     instance: Option<Instance>,
@@ -54,13 +54,10 @@ pub struct Builder<P = DefaultPostProcessorBuilder> {
     cursor_color: Color,
 }
 
-impl<P> Default for Builder<P>
-where
-    P: PostProcessorBuilder + Default,
-{
+impl Default for Builder {
     fn default() -> Self {
         Self {
-            postprocessor: Default::default(),
+            postprocessor: Box::new(DefaultPostProcessorBuilder::default()),
             fonts: Default::default(),
             backends: Default::default(),
             instance: Default::default(),
@@ -80,22 +77,17 @@ where
     }
 }
 
-impl Builder<DefaultPostProcessorBuilder> {
+impl Builder {
     pub fn new() -> Self {
         Self::default()
     }
 }
 
-impl<P> Builder<P>
-where
-    P: PostProcessorBuilder + Default,
-{
+impl Builder {
     /// New builder with some postprocessing after the rendering.
-    pub fn new_with_postprocessor(builder: P) -> Self {
-        Self {
-            postprocessor: builder,
-            ..Default::default()
-        }
+    pub fn with_postprocessor(mut self, builder: Box<dyn PostProcessorBuilder>) -> Self {
+        self.postprocessor = builder;
+        self
     }
 
     /// Use one of the given Backends.
@@ -265,10 +257,7 @@ where
     }
 }
 
-impl<P> Builder<P>
-where
-    P: PostProcessorBuilder,
-{
+impl Builder {
     /// Build a new backend with the provided surface target - e.g. a winit
     /// `Window`.
     pub async fn build_with_target<'s>(
@@ -540,7 +529,7 @@ where
                 handles: Default::default(),
                 img: Default::default(),
             },
-            wgpu_post_process: Box::new(post_process),
+            wgpu_post_process: post_process,
             wgpu_pipeline: WgpuPipeline {
                 sampler,
                 text_screen_size_buffer,

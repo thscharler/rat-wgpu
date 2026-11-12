@@ -1,3 +1,8 @@
+//!
+//! Default post processor.
+//!
+
+use crate::font::CellBox;
 use crate::postprocessor::{PostProcessor, PostProcessorBuilder};
 use std::num::NonZeroU64;
 use wgpu::{
@@ -11,16 +16,18 @@ use wgpu::{
     SamplerDescriptor, ShaderStages, StoreOp, SurfaceConfiguration, TextureSampleType, TextureView,
     TextureViewDimension, VertexState, include_wgsl,
 };
-use crate::font::CellBox;
 
 #[derive(Default)]
 pub struct DefaultPostProcessorBuilder;
 
 /// The default post-processor. Used when you don't want to perform any custom
 /// shading on the output. This just blits the composited text to the surface.
-/// This will stretch characters if the render area size falls between multiples
-/// of the character size. Use `AspectPreservingDefaultPostProcessor` if you
-/// don't want this behavior.
+///
+/// There is a feature flag `scale_to_window`.
+/// It decides whether you want the stretch the rendered image to fill
+/// the window or if you want to leave a small margin with the pixels
+/// that don't fit in a full cell box. The margin will be rendered in
+/// the default background color.
 pub struct DefaultPostProcessor {
     size: (u32, u32),
     uniforms: Buffer,
@@ -42,14 +49,12 @@ struct Uniforms {
 }
 
 impl PostProcessorBuilder for DefaultPostProcessorBuilder {
-    type PostProcessor<'a> = DefaultPostProcessor;
-
     fn compile(
-        self,
+        &mut self,
         device: &Device,
         text_view: &TextureView,
         surface_config: &SurfaceConfiguration,
-    ) -> DefaultPostProcessor {
+    ) -> Box<dyn PostProcessor> {
         let uniforms = device.create_buffer(&BufferDescriptor {
             label: Some("Text Blit Uniforms"),
             size: size_of::<Uniforms>() as u64,
@@ -148,14 +153,14 @@ impl PostProcessorBuilder for DefaultPostProcessorBuilder {
             &pipeline,
         );
 
-        DefaultPostProcessor {
+        Box::new(DefaultPostProcessor {
             size,
             uniforms,
             bindings: layout,
             sampler,
             pipeline,
             blitter,
-        }
+        })
     }
 }
 

@@ -1,3 +1,8 @@
+//!
+//! Some CRT effect post processor.
+//!
+
+use crate::font::CellBox;
 use crate::postprocessor::{PostProcessor, PostProcessorBuilder};
 use std::num::NonZeroU64;
 use std::time::Instant;
@@ -14,7 +19,6 @@ use wgpu::{
     TextureSampleType, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
     VertexState, include_wgsl,
 };
-use crate::font::CellBox;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -151,10 +155,19 @@ impl CrtPostProcessorBuilder {
 }
 
 impl PostProcessorBuilder for CrtPostProcessorBuilder {
-    type PostProcessor<'a> = CrtPostProcessor;
-
     fn compile(
-        self,
+        &mut self,
+        device: &Device,
+        text_view: &TextureView,
+        surface_config: &SurfaceConfiguration,
+    ) -> Box<dyn PostProcessor> {
+        Box::new(self.compile_impl(device, text_view, surface_config))
+    }
+}
+
+impl CrtPostProcessorBuilder {
+    fn compile_impl(
+        &mut self,
         device: &Device,
         text_view: &TextureView,
         surface_config: &SurfaceConfiguration,
@@ -454,7 +467,7 @@ impl PostProcessorBuilder for CrtPostProcessorBuilder {
             width: drawable_width,
             height: drawable_height,
             timer: Instant::now(),
-            settings: self.settings,
+            settings: self.settings.clone(),
         }
     }
 }
@@ -480,7 +493,8 @@ impl PostProcessor for CrtPostProcessor {
         let settings = self.settings.clone();
         let timer = self.timer;
 
-        *self = CrtPostProcessorBuilder::new(settings).compile(device, text_view, surface_config);
+        *self =
+            CrtPostProcessorBuilder::new(settings).compile_impl(device, text_view, surface_config);
 
         self.timer = timer;
     }
