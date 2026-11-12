@@ -2,7 +2,6 @@ use crate::WgpuBackend;
 use std::cell::Cell;
 
 pub use crossterm::winit_to_crossterm_event;
-pub use winit::event::WindowEvent;
 
 /// Keeps track of button and key states and the current
 /// mouse position.
