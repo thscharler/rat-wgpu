@@ -290,7 +290,7 @@ impl WindowEventState {
 }
 
 mod crossterm {
-    use crate::events::WindowEventState;
+    use crate::event::WindowEventState;
     use std::cell::Cell;
 
     /// Convert winit-events to crossterm-events.
