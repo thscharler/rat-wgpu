@@ -326,11 +326,16 @@ impl<'s> WgpuBackend<'s> {
     }
 
     /// Map a physical cursor position to a col/row position.
-    pub fn pos_to_cell(&self, pos: (i32, i32)) -> (u16, u16) {
+    ///
+    /// This can be tricky otherwise
+    /// - the postprocessor can add some distortion effect.
+    /// - bidi text changes the screen location of a text-cell
+    ///   from what you think it would be.
+    pub fn pos_to_cell(&self, pos: (i32, i32)) -> ratatui_core::layout::Position {
         let font_box = self.fonts.cell_box();
         if font_box.width == 0 || font_box.height == 0 {
             // might happen during resize or before the first render.
-            return (0, 0);
+            return ratatui_core::layout::Position::from((0, 0));
         }
 
         let (cell_x, cell_y) =
@@ -341,15 +346,15 @@ impl<'s> WgpuBackend<'s> {
         let offset = (cell_y * bounds.width) as usize;
         if self.tui_surface.cell_remap.len() < offset + bounds.width as usize {
             // might happen during resize or before the first render.
-            return (cell_x, cell_y);
+            return ratatui_core::layout::Position::from((cell_x, cell_y));
         }
         for cell in 0..bounds.width {
             if self.tui_surface.cell_remap[offset + cell as usize] == cell_x {
-                return (cell, cell_y);
+                return ratatui_core::layout::Position::from((cell, cell_y));
             }
         }
 
-        (cell_x, cell_y)
+        ratatui_core::layout::Position::from((cell_x, cell_y))
     }
 
     /// Get the [`PostProcessor`] associated with this backend.
@@ -376,7 +381,7 @@ impl<'s> WgpuBackend<'s> {
     /// Resize the rendering surface.
     ///
     /// This must be called to keep the backend in sync with your window size.
-    pub fn resize(&mut self, width: u32, height: u32) {
+    pub fn resize(&mut self, width: u32, height: u32) -> WindowSize {
         let limits = self.wgpu_base.device.limits();
         let width = width.min(limits.max_texture_dimension_2d);
         let height = height.min(limits.max_texture_dimension_2d);
@@ -386,7 +391,7 @@ impl<'s> WgpuBackend<'s> {
             || width == 0
             || height == 0
         {
-            return;
+            return self.window_size().expect("window-size");
         }
 
         self.wgpu_base.surface_config.width = width;
@@ -400,6 +405,8 @@ impl<'s> WgpuBackend<'s> {
             &mut self.wgpu_atlas,
             self.wgpu_post_process.as_mut(),
         );
+
+        self.window_size().expect("window-size")
     }
 
     /// Get the text currently displayed on the screen.
@@ -433,7 +440,7 @@ impl<'s> WgpuBackend<'s> {
     /// This will cause a full repaint of the screen the next
     /// time [`WgpuBackend::flush`] is called.
     /// A call to [ratatui_core::terminal::Terminal::draw] will do this.
-    pub fn update_font_vec(&mut self, new_fonts: Vec<Font>) {
+    pub fn update_font_vec(&mut self, new_fonts: Vec<Font>) -> WindowSize {
         self.fonts.clear_fonts();
         for font in new_fonts {
             self.fonts.add_font(font);
@@ -447,6 +454,8 @@ impl<'s> WgpuBackend<'s> {
             &mut self.wgpu_atlas,
             self.wgpu_post_process.as_mut(),
         );
+
+        self.window_size().expect("window-size")
     }
 
     /// Update the font-size used for rendering.
@@ -454,7 +463,11 @@ impl<'s> WgpuBackend<'s> {
     /// This will cause a full repaint of
     /// the screen the next time [`WgpuBackend::flush`] is called.
     /// A call to [ratatui_core::terminal::Terminal::draw] will do this.
-    pub fn update_font_size(&mut self, new_font_size: u32) {
+    ///
+    /// __Note__
+    /// You need to call [Terminal::resize] with the new WindowSize.
+    /// If you use [WinitEventState] you need to update its window-size too.
+    pub fn update_font_size(&mut self, new_font_size: u32) -> WindowSize {
         self.fonts.set_height_px(new_font_size);
 
         rebuild_surface(
@@ -465,6 +478,8 @@ impl<'s> WgpuBackend<'s> {
             &mut self.wgpu_atlas,
             self.wgpu_post_process.as_mut(),
         );
+
+        self.window_size().expect("window-size")
     }
 
     /// Toggle blinking.
