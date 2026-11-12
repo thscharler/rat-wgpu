@@ -2,7 +2,7 @@ use crossterm::event::Event;
 use rat_theme4::palette::Colors;
 use rat_theme4::theme::SalsaTheme;
 use rat_theme4::{StyleName, WidgetStyle, create_salsa_theme};
-use rat_wgpu::events::{WindowEventState, winit_to_crossterm_event};
+use rat_wgpu::event::{WindowEventState, winit_to_crossterm_event};
 use rat_wgpu::font::{fallback_emoji_font, fallback_font};
 use rat_wgpu::wgpu::Backends;
 use rat_wgpu::{Builder, WgpuBackend};
