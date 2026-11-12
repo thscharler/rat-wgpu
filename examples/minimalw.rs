@@ -2,7 +2,7 @@ use crossterm::event::Event;
 use rat_theme4::palette::Colors;
 use rat_theme4::theme::SalsaTheme;
 use rat_theme4::{StyleName, WidgetStyle, create_salsa_theme};
-use rat_wgpu::events::{ConvertCrosstermBase, ConvertEvent};
+use rat_wgpu::events::{WindowEventState, winit_to_crossterm_event};
 use rat_wgpu::font::{fallback_emoji_font, fallback_font};
 use rat_wgpu::wgpu::Backends;
 use rat_wgpu::{Builder, WgpuBackend};
@@ -32,10 +32,11 @@ pub struct MinimalWinit {
     state: MinimalState,
 }
 
+#[allow(dead_code)]
 pub struct MinimalContext {
     window: Arc<Window>,
     terminal: Terminal<WgpuBackend<'static>>,
-    events: ConvertCrosstermBase,
+    event_state: WindowEventState,
     font_size: u32,
 }
 
@@ -106,8 +107,8 @@ impl ApplicationHandler for MinimalWinit {
         self.ctx = Some(MinimalContext {
             window,
             terminal,
-            events: Default::default(),
-            font_size: 14,
+            event_state: Default::default(),
+            font_size: 20,
         })
     }
 
@@ -134,15 +135,16 @@ impl ApplicationHandler for MinimalWinit {
                 .window_size()
                 .expect("window-size");
             _ = ctx.terminal.resize(Rect::from(size.columns_rows));
-            ctx.events.set_window_size(size, ctx.terminal.backend());
+            ctx.event_state
+                .update_window_size(size, ctx.terminal.backend());
         }
         if let WindowEvent::RedrawRequested = event {
             rr = Outcome::Changed;
         }
-        ctx.events.update_state(&event, ctx.terminal.backend());
+        ctx.event_state.update_state(&event, ctx.terminal.backend());
 
         if rr == Outcome::Continue {
-            if let Some(ctevent) = ctx.events.convert(event) {
+            if let Ok(ctevent) = winit_to_crossterm_event((&event, &mut ctx.event_state)) {
                 let ttt = SystemTime::now();
                 let r = process_event(&ctevent, &mut self.state, ctx);
                 self.state.last_event = ttt.elapsed().expect("duration");
@@ -235,30 +237,24 @@ fn process_event(
         ct_event!(key press CONTROL-'q') => return Err(()),
         ct_event!(scroll CONTROL down for _x,_y) => {
             let bk = ctx.terminal.backend_mut();
-            ctx.font_size += 1;
-            bk.update_font_size(ctx.font_size);
 
-            let size = ctx
-                .terminal
-                .backend_mut()
-                .window_size()
-                .expect("window-size");
+            ctx.font_size += 1;
+
+            let size = bk.update_font_size(ctx.font_size);
             _ = ctx.terminal.resize(Rect::from(size.columns_rows));
-            ctx.events.set_window_size(size, ctx.terminal.backend());
+            ctx.event_state
+                .update_window_size(size, ctx.terminal.backend());
             return Ok(Outcome::Changed);
         }
         ct_event!(scroll CONTROL up for _x,_y) => {
             let bk = ctx.terminal.backend_mut();
-            ctx.font_size -= 1;
-            bk.update_font_size(ctx.font_size);
 
-            let size = ctx
-                .terminal
-                .backend_mut()
-                .window_size()
-                .expect("window-size");
+            ctx.font_size -= 1;
+
+            let size = bk.update_font_size(ctx.font_size);
             _ = ctx.terminal.resize(Rect::from(size.columns_rows));
-            ctx.events.set_window_size(size, ctx.terminal.backend());
+            ctx.event_state
+                .update_window_size(size, ctx.terminal.backend());
             return Ok(Outcome::Changed);
         }
         _ => {}
