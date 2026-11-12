@@ -3,21 +3,20 @@
 //!
 //! Rendering an image works in two steps.
 //!
-//! * Call [WgpuBackend::add_image] to pass the image data to the backend.
-//! You get a handle for the image that will be used for the actual rendering.
-//! These images are stored as Textures in GPU memory and are freed
-//! when the last clone of the handle is dropped.
+//! * Call [WgpuBackend::add_image](crate::WgpuBackend::add_image) to pass
+//! the image data to the backend. You get back a handle for the image
+//! that will be used for the actual rendering. The images are stored
+//! as Textures in GPU memory and are freed when the last clone of the
+//! handle is dropped.
 //!
-//! * Get the ImageBuffer from the backend.
-//!
-//! Then you call the normal [Terminal::draw]. Add any images to be rendered
-//! during `draw`.
-//!
-//! At the end of `draw` ratatui will send its changes to the backend
-//! and all buffered images will be rendered too.
-//!
+//! * Get the [ImageBuffer] from the backend.
+//! Add the images you want to render during the normal
+//! [Terminal::draw](ratatui_core::terminal::Terminal) either with
+//! [ImageBuffer::render] or [ImageBuffer::render_px].
+//! It's ok to keep the ImageBuffer longer than the draw call, it will
+//! be flushed automatically.
 
-use crate::CellBox;
+use crate::font::CellBox;
 use crate::util::intersect;
 use euclid::Vector2D;
 use raqote::Transform;
@@ -27,7 +26,7 @@ use std::sync::Arc;
 /// Handle for an added image.
 ///
 /// When the last clone of the handle is dropped, the backing
-/// texture will be dropped after the next flush().
+/// texture will be dropped after the next draw.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct ImageHandle {
     id: Arc<usize>,
@@ -38,7 +37,7 @@ impl ImageHandle {
         Self { id: Arc::new(id) }
     }
 
-    pub fn id(&self) -> usize {
+    pub(crate) fn id(&self) -> usize {
         *self.id
     }
 
@@ -91,7 +90,7 @@ pub enum ImageFit {
 
 /// The rendered data for one image.
 #[derive(Debug, Clone)]
-pub struct ImageCell {
+pub(crate) struct ImageCell {
     pub image_id: usize,
     pub view_rect: (i32, i32, u32, u32),
     pub view_clip: (i32, i32, u32, u32),
@@ -147,11 +146,10 @@ impl ImageArg {
     }
 }
 
-/// The ImageBuffer gets the image-handles for the images
-/// that will actually be rendered during one render pass.
+/// The ImageBuffer holds the images that will actually be rendered.
 ///
 /// It will be automatically processed at the end of
-/// [Terminal::draw].
+/// [Terminal::draw](ratatui_core::terminal::Terminal::draw).
 #[derive(Debug, Default, Clone)]
 pub struct ImageBuffer {
     // The buffer area.
@@ -171,9 +169,15 @@ pub struct ImageBuffer {
 /// Scaling of the image to the given area.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ImageScale {
+    /// Scale to fit either horizontally or vertically
+    /// to fit the full image.
     XY,
+    /// Scale the image to fill the area horizontally.
     X,
+    /// Scale the image to fill the area vertically.
     Y,
+    /// Dont scale the image.
+    None,
 }
 
 /// Alignment of the image within the given area.
@@ -188,8 +192,8 @@ impl ImageBuffer {
     /// Create a temporary ImageBuffer.
     ///
     /// Any images added will not be automatically rendered, you
-    /// have to append the temporary buffer to the one given
-    /// by [ImageFrame].
+    /// have to append the temporary buffer to the one obtained
+    /// from the backend.
     ///
     /// You use this if you want to render images to a bigger
     /// area and later move and clip the area to an actual target
@@ -251,7 +255,7 @@ impl ImageBuffer {
     ///
     /// This will not check if the area is inside the window bounds.
     pub fn rect_px(&self, area: ratatui_core::layout::Rect) -> (i32, i32, u32, u32) {
-        let font_box = self.cell_box();
+        let font_box = self.cell_box;
         (
             area.x as i32 * font_box.width as i32,
             area.y as i32 * font_box.height as i32,
@@ -260,31 +264,23 @@ impl ImageBuffer {
         )
     }
 
-    /// Get the active FontBox
-    pub fn cell_box(&self) -> CellBox {
-        self.cell_box
-    }
-
     /// Get the image-size in px for an added image.
     pub fn image_size(&self, id: &ImageHandle) -> Option<(u32, u32)> {
         self.image_size.get(&id.id).cloned()
     }
 
-    /// Get the rendered images.
-    pub fn images(&self) -> &[ImageCell] {
-        &self.images
-    }
-
     /// Render an image in the given area.
     ///
-    /// To get an ImageHandle, add the image with [WgpuBackend::add_image].
+    /// To get an ImageHandle, add the image with
+    /// [WgpuBackend::add_image](crate::WgpuBackend::add_image).
     pub fn render(&mut self, id: &ImageHandle, area: ratatui_core::layout::Rect, arg: ImageArg) {
         self.render_px(id, self.rect_px(area), arg)
     }
 
     /// Render an image in the given area.
     ///
-    /// To get an ImageHandle, add the image with [WgpuBackend::add_image].
+    /// To get an ImageHandle, add the image with
+    /// [WgpuBackend::add_image](crate::WgpuBackend::add_image).
     pub fn render_px(&mut self, id: &ImageHandle, rect: (i32, i32, u32, u32), arg: ImageArg) {
         let tr = if let Some(fit) = arg.fit {
             use ImageAlign::*;
@@ -391,6 +387,19 @@ impl ImageBuffer {
         } else if scale == X {
             let w_scale = 1.0f32;
             let h_scale = (view_height * img_width) / (view_width * img_height);
+            if align == Start {
+                Transform::scale(w_scale, h_scale)
+            } else if align == Center {
+                Transform::scale(w_scale, h_scale)
+                    .then_translate(Vector2D::new(0.0, (1.0 - h_scale) / 2.0))
+            } else if align == End {
+                Transform::scale(w_scale, h_scale).then_translate(Vector2D::new(0.0, 1.0 - h_scale))
+            } else {
+                unreachable!()
+            }
+        } else if scale == None {
+            let w_scale = 1.0f32;
+            let h_scale = 1.0f32;
             if align == Start {
                 Transform::scale(w_scale, h_scale)
             } else if align == Center {

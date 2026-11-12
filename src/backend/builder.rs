@@ -192,16 +192,16 @@ where
         self
     }
 
-    /// Use the specified [`ratatui::style::Color`] for the default foreground
-    /// color. Defaults to Black.
+    /// Use the specified [Color](ratatui_core::style::Color) for
+    /// the default foreground color. Defaults to Black.
     #[must_use]
     pub fn with_fg_color(mut self, fg: Color) -> Self {
         self.reset_fg = fg;
         self
     }
 
-    /// Use the specified [`ratatui::style::Color`] for the default background
-    /// color. Defaults to White.
+    /// Use the specified [Color](ratatui_core::style::Color) for
+    /// the default background color. Defaults to White.
     #[must_use]
     pub fn with_bg_color(mut self, bg: Color) -> Self {
         self.reset_bg = bg;
@@ -222,39 +222,42 @@ where
         self
     }
 
-    /// This library doesn't control the cursor blink timer by itself, instead
-    /// it relies on [blink] being called. Every call to blink increases an
-    /// internal counter. Every time `internal % counter == 0` the blink-state
-    /// is switched.
+    /// WgpuBackend doesn't have a builtin timer for blinking text and cursor.
+    /// Instead, it relies on the application to call [WgpuBackend::blink]
+    /// regularly (every 200ms is fine). Every call to blink increases
+    /// an internal counter.
     ///
-    /// So. To switch with every call to blink give a counter 1.
-    /// To blink half as fast give a counter 2.
+    /// The cursor blink state is switched whenever `internal % counter` is 0.
+    ///
+    /// Default is 5.
     #[must_use]
     pub fn with_cursor_blink(mut self, counter: u8) -> Self {
         self.cursor_blink = counter;
         self
     }
 
-    /// This library doesn't control the blink timer by itself, instead
-    /// it relies on [blink] being called. Every call to blink increases an
-    /// internal counter. Every time `internal % counter == 0` the blink-state
-    /// is switched.
+    /// WgpuBackend doesn't have a builtin timer for blinking text and cursor.
+    /// Instead, it relies on the application to call [WgpuBackend::blink]
+    /// regularly (every 200ms is fine). Every call to blink increases
+    /// an internal counter.
     ///
-    /// So. To switch with every call to blink give a counter 1.
-    /// To blink half as fast give a counter 2.
+    /// The blink state is switched whenever `internal % counter` is 0.
+    ///
+    /// Default is 1.
     #[must_use]
     pub fn with_rapid_blink(mut self, counter: u8) -> Self {
         self.fast_blink = counter;
         self
     }
 
-    /// This library doesn't control the blink timer by itself, instead
-    /// it relies on [blink] being called. Every call to blink increases an
-    /// internal counter. Every time `internal % counter == 0` the blink-state
-    /// is switched.
+    /// WgpuBackend doesn't have a builtin timer for blinking text and cursor.
+    /// Instead, it relies on the application to call [WgpuBackend::blink]
+    /// regularly (every 200ms is fine). Every call to blink increases an
+    /// internal counter.
     ///
-    /// So. To switch with every call to blink give a counter 1.
-    /// To blink half as fast give a counter 2.
+    /// The blink state is switched whenever `internal % counter` is 0.
+    ///
+    /// Default is 5.
     #[must_use]
     pub fn with_slow_blink(mut self, counter: u8) -> Self {
         self.slow_blink = counter;

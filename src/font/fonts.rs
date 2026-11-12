@@ -1,5 +1,4 @@
-use crate::CellBox;
-use crate::font::Font;
+use crate::font::{CellBox, Font};
 use ratatui_core::buffer::Cell;
 use ratatui_core::style::Modifier;
 

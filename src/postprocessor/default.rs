@@ -1,4 +1,3 @@
-use crate::CellBox;
 use crate::postprocessor::{PostProcessor, PostProcessorBuilder};
 use std::num::NonZeroU64;
 use wgpu::{
@@ -12,6 +11,7 @@ use wgpu::{
     SamplerDescriptor, ShaderStages, StoreOp, SurfaceConfiguration, TextureSampleType, TextureView,
     TextureViewDimension, VertexState, include_wgsl,
 };
+use crate::font::CellBox;
 
 #[derive(Default)]
 pub struct DefaultPostProcessorBuilder;

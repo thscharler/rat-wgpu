@@ -18,32 +18,6 @@ pub mod wgpu {
     pub use wgpu::Backends;
 }
 
-/// The metrics needed for rendering.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct CellBox {
-    /// Width in px.
-    pub width: u32,
-    /// Height in px.
-    pub height: u32,
-    /// Baseline for glyphs. Measured from the top of the box.
-    pub ascender: u32,
-}
-
-impl CellBox {
-    /// Pixel to cell-position. Rounded down.
-    /// Out-of-bounds are clamped to 0..width/height - 1.
-    pub(crate) fn cell_pos(
-        &self,
-        x: i32,
-        y: i32,
-        bounds: ratatui_core::layout::Size,
-    ) -> ratatui_core::layout::Position {
-        let cx = (x / self.width as i32).clamp(0, bounds.width.saturating_sub(1) as i32) as u16;
-        let cy = (y / self.height as i32).clamp(0, bounds.height.saturating_sub(1) as i32) as u16;
-        ratatui_core::layout::Position::new(cx, cy)
-    }
-}
-
 #[derive(Debug)]
 pub enum Error {
     SurfaceCreationFailed(Box<dyn std::error::Error>),

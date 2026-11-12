@@ -1,4 +1,3 @@
-use crate::CellBox;
 use crate::postprocessor::{PostProcessor, PostProcessorBuilder};
 use std::num::NonZeroU64;
 use std::time::Instant;
@@ -15,6 +14,7 @@ use wgpu::{
     TextureSampleType, TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension,
     VertexState, include_wgsl,
 };
+use crate::font::CellBox;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]

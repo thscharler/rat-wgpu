@@ -1,6 +1,10 @@
-use crate::CellBox;
+//!
+//! Postprocessing for the terminal screen.
+//!
+
 use std::any::Any;
 use wgpu::{CommandEncoder, Device, Queue, SurfaceConfiguration, TextureView};
+use crate::font::CellBox;
 
 pub mod default;
 pub mod crt;
@@ -23,6 +27,7 @@ pub trait PostProcessorBuilder {
 /// A pipeline for post-processing rendered text.
 pub trait PostProcessor: Any {
     /// Map the screen-coordinates to cell-coordinates.
+    /// Here you can make good for any distortions.
     fn map_to_cell(&self, scr_x: i32, scr_y: i32, font_box: CellBox) -> (u16, u16);
 
     /// Called after the drawing dimensions have changed (e.g. the surface was

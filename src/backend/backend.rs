@@ -1,3 +1,4 @@
+use crate::Error;
 use crate::backend::builder::{build_img_bindings, build_wgpu_state};
 use crate::backend::plan_cache::PlanCache;
 use crate::backend::surface::RenderSurface;
@@ -9,13 +10,12 @@ use crate::backend::{
 use crate::colors::{ColorTable, Rgb};
 use crate::cursor::{Blinking, CursorStyle};
 use crate::font::rasterize::rasterize_glyph;
-use crate::font::{Font, Fonts};
+use crate::font::{CellBox, Font, Fonts};
 use crate::image::ImageCell;
 use crate::image::{ImageBuffer, ImageHandle};
 use crate::postprocessor::{PostProcessor, PostProcessorBuilder};
 use crate::text_atlas::Key;
 use crate::util::clip_uv;
-use crate::{CellBox, Error};
 use bitvec::slice::BitSlice;
 use ratatui_core::backend::{Backend, ClearType, WindowSize};
 use ratatui_core::buffer::{Cell, CellDiffOption};
@@ -42,14 +42,18 @@ use wgpu::{
 ///
 /// Constructed using a [`Builder`](crate::Builder).
 ///
-/// The first lifetime parameter is the lifetime of the data for referenced
-/// [`Font`] objects. The second lifetime parameter is the lifetime of the
-/// referenced [`Surface`] (typically the lifetime of your window object).
+/// The  lifetime parameter is the lifetime of the
+/// referenced `Surface` (typically the lifetime of your window object).
 ///
-/// Limitations:
-/// - The cursor is tracked but not rendered.
-/// - No builtin accessibilty, although [`WgpuBackend::get_text`] is provided to
-///   access the screen's contents.
+/// __Extras__
+/// * Fonts and fallback Fonts for unknown glyphs.
+/// * RTL text support.
+/// * Cursorstyles and colors.
+/// * Blinking text and blinking cursor.
+/// * Image rendering.
+/// * Headless supported.
+/// * Postprocessor stage that can transform the final render.
+///
 pub struct WgpuBackend<'s> {
     // active fonts
     pub(super) fonts: Fonts,
@@ -325,6 +329,16 @@ impl<'s> WgpuBackend<'s> {
         self.tui_surface.cursor_color
     }
 
+    /// Describes the dimensions of a Cell.
+    ///
+    /// __Note__
+    /// This can not be used to map a screen coordinate to a cell.
+    /// If there is any bidi text the cell will not be rendered where
+    /// you think. Use [WgpuBackend::pos_to_cell]
+    pub fn cell_box(&self) -> CellBox {
+        self.fonts.cell_box()
+    }
+
     /// Map a physical cursor position to a col/row position.
     ///
     /// This can be tricky otherwise
@@ -434,12 +448,22 @@ impl<'s> WgpuBackend<'s> {
         self.tui_surface.colors = new_colors;
     }
 
-    /// Replace the fonts used for rendering. This will keep the fallback fonts.
-    /// If you want to replace those too, use [update_fonts].
+    /// Replace the fonts used for rendering.
+    /// This will keep the fallback fonts.
     ///
     /// This will cause a full repaint of the screen the next
-    /// time [`WgpuBackend::flush`] is called.
-    /// A call to [ratatui_core::terminal::Terminal::draw] will do this.
+    /// time [WgpuBackend::flush] is called. A call to
+    /// [Terminal::draw](ratatui_core::terminal::Terminal::draw)
+    /// will do this.
+    ///
+    /// __Returns__
+    ///
+    /// The new window size. The number of rows/columns may change with the
+    /// font.
+    ///
+    /// __Note__
+    /// If you use [WindowEventState][crate::event::WindowEventState]
+    /// you need to update its window-size too.
     pub fn update_font_vec(&mut self, new_fonts: Vec<Font>) -> WindowSize {
         self.fonts.clear_fonts();
         for font in new_fonts {
@@ -460,13 +484,18 @@ impl<'s> WgpuBackend<'s> {
 
     /// Update the font-size used for rendering.
     ///
-    /// This will cause a full repaint of
-    /// the screen the next time [`WgpuBackend::flush`] is called.
-    /// A call to [ratatui_core::terminal::Terminal::draw] will do this.
+    /// This will cause a full repaint of the screen the next time
+    /// [`WgpuBackend::flush`] is called. A call to
+    /// [Terminal::draw](ratatui_core::terminal::Terminal::draw) will do this.
+    ///
+    /// __Returns__
+    ///
+    /// The new window size. The number of rows/columns may change with the
+    /// font-size.
     ///
     /// __Note__
-    /// You need to call [Terminal::resize] with the new WindowSize.
-    /// If you use [WinitEventState] you need to update its window-size too.
+    /// If you use [WindowEventState][crate::event::WindowEventState]
+    /// you need to update its window-size too.
     pub fn update_font_size(&mut self, new_font_size: u32) -> WindowSize {
         self.fonts.set_height_px(new_font_size);
 
@@ -581,11 +610,11 @@ impl<'s> WgpuBackend<'s> {
     /// Returns the ImageBuffer.
     ///
     /// This will be used by the application to queue images for rendering.
-    /// Add the image with [add_image] first, and use the ImageBuffer when
+    /// Add the image with [WgpuBackend::add_image] first, and use the ImageBuffer when
     /// rendering the UI.
     ///
     /// The ImageBuffer will be used and emptied at the end of the
-    /// [Terminal::draw] call.
+    /// [Terminal::draw](ratatui_core::terminal::Terminal::draw) call.
     pub fn image_buffer(&self) -> Arc<Mutex<ImageBuffer>> {
         self.tui_surface.image_buffer.clone()
     }
@@ -594,7 +623,8 @@ impl<'s> WgpuBackend<'s> {
     ///
     /// __Info__
     ///
-    /// You need to call [unmap_headless_buffer] to release the mapping.
+    /// You need to call [WgpuBackend::unmap_headless_buffer] to
+    /// release the mapping.
     pub fn map_headless_buffer(&self) -> Result<BufferView, Error> {
         let RenderSurface::Headless(surface) = &self.wgpu_base.surface else {
             panic!("can only be called when initialized as headless.");

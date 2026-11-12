@@ -1,10 +1,18 @@
+//!
+//! Some utilities for winit events.
+//!
+
 use crate::WgpuBackend;
 use std::cell::Cell;
 
 pub use crossterm::winit_to_crossterm_event;
 
-/// Keeps track of button and key states and the current
-/// mouse position.
+/// Keeps track of button and key states and the current mouse position.
+///
+/// Call [WindowEventState::update_state] for every winit-event received
+/// to keep this up to date.
+/// Any changes of the window size or the size of one Cell needs a call
+/// to [WindowEventState::update_window_size].
 #[derive(Debug, Default, Clone)]
 pub struct WindowEventState {
     /// Modifiers.
@@ -23,7 +31,8 @@ pub struct WindowEventState {
     pub mouse_px: (i32, i32),
 }
 
-/// Winit event with extra tracked modifier-state and window-size.
+/// Combines the original WindowEvent with the current state
+/// for modifiers/buttons and the current mouse position.
 #[derive(Debug, Clone)]
 pub struct CompositeWindowEvent {
     pub event: winit::event::WindowEvent,
@@ -119,7 +128,9 @@ impl WindowEventState {
     /// Sets the window-size.
     ///
     /// __Note__
-    /// When the window-size changes you should use [update_window_size] instead.
+    ///
+    /// When the window-size changes you use [WindowEventState::update_window_size],
+    /// not this simple setter.
     pub fn set_window_size(&mut self, window_size: ratatui_core::backend::WindowSize) {
         self.window_size = window_size.columns_rows;
         self.window_size_px = window_size.pixels;

@@ -1,8 +1,8 @@
-use crate::CellBox;
 use evictor::Lru;
 use ratatui_core::style::Modifier;
 use std::num::NonZeroUsize;
 use std::ops::Deref;
+use crate::font::CellBox;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 pub(crate) struct Key {
