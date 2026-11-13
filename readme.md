@@ -15,21 +15,17 @@ which was the starting point for this crate. I reuse
 a lot of the actual wgpu parts and the details of the
 font-rendering.
 
-__Improvements__
-
-* Fixes quite a few bugs with glyph rendering and uses
-  a different approach for placing the glyphs on screen.
-* Can map screen coordinates accurately back to
-  cell coordinates even with bidi text.
-* Cursor and text blinking.
-* Image rendering.
-* Easier font management.
+* Renders the TUI to some WGPU RenderSurface.
+    * Text rendering with multiple fallbacks for unknown glyphs.
+    * BIDI text.
+    * Cursor and text blinking.
+    * Image rendering.
+* Postprocessing stage for the rendered TUI.
 * Support to map winit events to crossterm events.
-* Easier switch of the postprocessing stage.
 
 __Running__
 
-Start with examples/minimalw.rs.
+Start with [examples/minimalw.rs](https://github.com/thscharler/rat-wgpu/blob/master/examples/minimalw.rs).
 
 It starts from bare bones and sets up a minimal winit
 event loop.

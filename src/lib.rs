@@ -1,15 +1,17 @@
+#![doc = include_str!("../readme.md")]
+
 use std::fmt::{Display, Formatter};
 
 mod backend;
 pub mod colors;
 pub mod cursor;
+#[cfg(feature = "winit-event")]
+pub mod event;
 pub mod font;
 pub mod image;
 pub mod postprocessor;
 mod text_atlas;
 pub(crate) mod util;
-#[cfg(feature = "winit-event")]
-pub mod event;
 
 pub use backend::backend::WgpuBackend;
 pub use backend::builder::WgpuBackendBuilder;
