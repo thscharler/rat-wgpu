@@ -264,7 +264,7 @@ impl WgpuBackendBuilder {
         mut self,
         target: impl Into<SurfaceTarget<'s>>,
     ) -> Result<WgpuBackend<'s>, Error> {
-        let backends = if self.backends == "*" {
+        let backends = if self.backends == "*" || self.backends == "" {
             Backends::all()
         } else {
             Backends::from_comma_list(&self.backends)
@@ -317,7 +317,7 @@ impl WgpuBackendBuilder {
         mut self,
         mut surface: RenderSurface<'s>,
     ) -> Result<WgpuBackend<'s>, Error> {
-        let backends = if self.backends == "*" {
+        let backends = if self.backends == "*" || self.backends == "" {
             Backends::all()
         } else {
             Backends::from_comma_list(&self.backends)
