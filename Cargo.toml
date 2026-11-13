@@ -3,8 +3,12 @@ name = "rat-wgpu"
 version = "1.0.0"
 authors = ["thscharler <thscharler@gmail.com>"]
 edition = "2024"
+description = "ratatui backend with wgpu rendering"
 license = "MIT/Apache-2.0"
+repository = "https://github.com/thscharler/rat-wgpu"
 readme = "readme.md"
+keywords = ["ratatui", "wgpu", "backend"]
+categories = ["command-line-interface", "gui"]
 
 [features]
 default = ["fallback_font"]
