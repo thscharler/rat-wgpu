@@ -7,7 +7,6 @@ use ratatui_core::text::Line;
 use ratatui_widgets::block::Block;
 use ratatui_widgets::paragraph::Paragraph;
 use std::sync::Arc;
-use wgpu::Backends;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::EventLoop;
@@ -49,7 +48,7 @@ impl ApplicationHandler for App {
                             fallback_font().expect("fallback"),
                             fallback_emoji_font().expect("emoji"),
                         ])
-                        .with_backends(Backends::from_comma_list("vulkan"))
+                        .with_backends("vulkan")
                         .with_width_and_height(size.width, size.height)
                         .build_with_target(self.window.as_ref().unwrap().clone()),
                 )

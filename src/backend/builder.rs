@@ -38,7 +38,7 @@ const CACHE_HEIGHT: u32 = 1200;
 pub struct WgpuBackendBuilder {
     postprocessor: Box<dyn PostProcessorBuilder>,
     fonts: Fonts,
-    backends: Backends,
+    backends: String,
     instance: Option<Instance>,
     limits: Option<Limits>,
     present_mode: Option<PresentMode>,
@@ -92,8 +92,8 @@ impl WgpuBackendBuilder {
 
     /// Use one of the given Backends.
     #[must_use]
-    pub fn with_backends(mut self, backends: Backends) -> Self {
-        self.backends = backends;
+    pub fn with_backends(mut self, backends: &str) -> Self {
+        self.backends = backends.into();
         self
     }
 
@@ -264,9 +264,15 @@ impl WgpuBackendBuilder {
         mut self,
         target: impl Into<SurfaceTarget<'s>>,
     ) -> Result<WgpuBackend<'s>, Error> {
+        let backends = if self.backends == "*" {
+            Backends::all()
+        } else {
+            Backends::from_comma_list(&self.backends)
+        };
+
         let instance = self.instance.get_or_insert_with(|| {
             Instance::new(InstanceDescriptor {
-                backends: self.backends,
+                backends,
                 flags: InstanceFlags::default(),
                 memory_budget_thresholds: Default::default(),
                 backend_options: Default::default(),
@@ -311,9 +317,15 @@ impl WgpuBackendBuilder {
         mut self,
         mut surface: RenderSurface<'s>,
     ) -> Result<WgpuBackend<'s>, Error> {
+        let backends = if self.backends == "*" {
+            Backends::all()
+        } else {
+            Backends::from_comma_list(&self.backends)
+        };
+
         let instance = self.instance.get_or_insert_with(|| {
             Instance::new(InstanceDescriptor {
-                backends: self.backends,
+                backends,
                 flags: InstanceFlags::default(),
                 memory_budget_thresholds: Default::default(),
                 backend_options: Default::default(),

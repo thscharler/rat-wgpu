@@ -16,10 +16,6 @@ pub(crate) mod util;
 pub use backend::backend::WgpuBackend;
 pub use backend::builder::WgpuBackendBuilder;
 
-pub mod wgpu {
-    pub use wgpu::Backends;
-}
-
 #[derive(Debug)]
 pub enum Error {
     SurfaceCreationFailed(Box<dyn std::error::Error>),

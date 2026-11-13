@@ -4,8 +4,7 @@ use rat_theme4::theme::SalsaTheme;
 use rat_theme4::{StyleName, WidgetStyle, create_salsa_theme};
 use rat_wgpu::event::{WindowEventState, winit_to_crossterm_event};
 use rat_wgpu::font::{fallback_emoji_font, fallback_font};
-use rat_wgpu::wgpu::Backends;
-use rat_wgpu::{WgpuBackendBuilder, WgpuBackend};
+use rat_wgpu::{WgpuBackend, WgpuBackendBuilder};
 use rat_widget::event::{Dialog, HandleEvent, MenuOutcome, Outcome, Regular, ct_event, event_flow};
 use rat_widget::focus::{FocusBuilder, impl_has_focus};
 use rat_widget::menu::{MenuLine, MenuLineState};
@@ -93,7 +92,7 @@ impl ApplicationHandler for MinimalWinit {
                         fallback_font().expect("fallback"),
                         fallback_emoji_font().expect("emoji"),
                     ])
-                    .with_backends(Backends::from_comma_list("vulkan"))
+                    .with_backends("vulkan")
                     .with_width_and_height(size.width, size.height)
                     .build_with_target(window.clone()),
             )

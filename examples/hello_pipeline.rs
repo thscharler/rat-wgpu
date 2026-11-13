@@ -68,7 +68,7 @@ impl ApplicationHandler for App {
                             fallback_font().expect("fallback"),
                             fallback_emoji_font().expect("emoji"),
                         ])
-                        .with_backends(Backends::from_comma_list("vulkan"))
+                        .with_backends("vulkan")
                         .with_width_and_height(size.width, size.height)
                         .build_with_target(self.window.as_ref().unwrap().clone()),
                 )
