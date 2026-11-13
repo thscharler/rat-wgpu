@@ -10,7 +10,7 @@
 
 A wgpu based rendering backend for ratatui.
 
-Kudos to https://github.com/Jesterhearts/ratatui-wgpu
+Kudos to <https://github.com/Jesterhearts/ratatui-wgpu> 
 which was the starting point for this crate. I reuse
 a lot of the actual wgpu parts and the details of the
 font-rendering.
