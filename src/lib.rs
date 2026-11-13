@@ -12,7 +12,7 @@ pub(crate) mod util;
 pub mod event;
 
 pub use backend::backend::WgpuBackend;
-pub use backend::builder::Builder;
+pub use backend::builder::WgpuBackendBuilder;
 
 pub mod wgpu {
     pub use wgpu::Backends;

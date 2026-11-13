@@ -1,6 +1,6 @@
 use chrono::Local;
 use rat_wgpu::font::{fallback_emoji_font, fallback_font};
-use rat_wgpu::{Builder, WgpuBackend};
+use rat_wgpu::{WgpuBackendBuilder, WgpuBackend};
 use ratatui_core::style::Stylize;
 use ratatui_core::terminal::Terminal;
 use ratatui_core::text::Line;
@@ -44,7 +44,7 @@ impl ApplicationHandler for App {
         self.backend = Some(
             Terminal::new(
                 futures_lite::future::block_on(
-                    Builder::new()
+                    WgpuBackendBuilder::new()
                         .with_fonts([
                             fallback_font().expect("fallback"),
                             fallback_emoji_font().expect("emoji"),

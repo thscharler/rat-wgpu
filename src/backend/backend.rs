@@ -40,7 +40,7 @@ use wgpu::{
 
 /// A ratatui backend leveraging wgpu for rendering.
 ///
-/// Constructed using a [`Builder`](crate::Builder).
+/// Constructed using a [`Builder`](crate::WgpuBackendBuilder).
 ///
 /// The  lifetime parameter is the lifetime of the
 /// referenced `Surface` (typically the lifetime of your window object).
@@ -520,7 +520,7 @@ impl<'s> WgpuBackend<'s> {
     /// This will give the base-rate for all blink effects. The
     /// actually rate is determined by the divisor for each effect.
     /// You can set the divisors when creating the backend with the
-    /// [Builder](crate::Builder).
+    /// [Builder](crate::WgpuBackendBuilder).
     pub fn blink(&mut self, blinking: Blinking) {
         let bounds = self.size().expect("size");
 

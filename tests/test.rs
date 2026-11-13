@@ -3,7 +3,7 @@ use image::ImageBuffer;
 use image::Rgba;
 use image::load_from_memory;
 use image::{ExtendedColorType, GenericImageView};
-use rat_wgpu::Builder;
+use rat_wgpu::WgpuBackendBuilder;
 use rat_wgpu::font::{Font, font_db};
 use rat_wgpu::postprocessor::default::DefaultPostProcessorBuilder;
 use ratatui_core::style::Color;
@@ -29,7 +29,7 @@ fn a_z() {
 
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
-            Builder::<DefaultPostProcessorBuilder>::default()
+            WgpuBackendBuilder::default()
                 .with_fallback_font(Font::new(font_id).expect("Invalid font"))
                 .with_font_size_px(24)
                 .with_width_and_height(512, 72)
@@ -89,7 +89,7 @@ fn arabic() {
 
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
-            Builder::<DefaultPostProcessorBuilder>::default()
+            WgpuBackendBuilder::default()
                 .with_fallback_font(Font::new(font_id).expect("Invalid font"))
                 .with_font_size_px(24)
                 .with_width_and_height(256, 72)
@@ -148,7 +148,7 @@ fn really_wide() {
 
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
-            Builder::<DefaultPostProcessorBuilder>::default()
+            WgpuBackendBuilder::default()
                 .with_fallback_font(Font::new(font_id).expect("Invalid font"))
                 .with_font_size_px(24)
                 .with_width_and_height(512, 72)
@@ -207,7 +207,7 @@ fn mixed() {
 
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
-            Builder::<DefaultPostProcessorBuilder>::default()
+            WgpuBackendBuilder::default()
                 .with_fallback_font(Font::new(font_id).expect("Invalid font"))
                 .with_font_size_px(24)
                 .with_width_and_height(512, 72)
@@ -269,7 +269,7 @@ fn mixed_colors() {
 
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
-            Builder::<DefaultPostProcessorBuilder>::default()
+            WgpuBackendBuilder::default()
                 .with_fallback_font(Font::new(font_id).expect("Invalid font"))
                 .with_font_size_px(24)
                 .with_width_and_height(512, 72)
@@ -335,7 +335,7 @@ fn overlap() {
 
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
-            Builder::<DefaultPostProcessorBuilder>::default()
+            WgpuBackendBuilder::default()
                 .with_fallback_font(Font::new(font_id).expect("Invalid font"))
                 .with_font_size_px(24)
                 .with_width_and_height(256, 72)
@@ -428,7 +428,7 @@ fn overlap_colors() {
 
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
-            Builder::<DefaultPostProcessorBuilder>::default()
+            WgpuBackendBuilder::default()
                 .with_fallback_font(Font::new(font_id).expect("Invalid font"))
                 .with_font_size_px(24)
                 .with_width_and_height(256, 72)
@@ -487,7 +487,7 @@ fn rgb_conversion() {
 
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
-            Builder::<DefaultPostProcessorBuilder>::default()
+            WgpuBackendBuilder::default()
                 .with_fallback_font(Font::new(font_id).expect("Invalid font"))
                 .with_font_size_px(24)
                 .with_width_and_height(256, 72)
@@ -546,7 +546,7 @@ fn srgb_conversion() {
 
     let mut terminal = Terminal::new(
         futures_lite::future::block_on(
-            Builder::<DefaultPostProcessorBuilder>::default()
+            WgpuBackendBuilder::default()
                 .with_fallback_font(Font::new(font_id).expect("Invalid font"))
                 .with_font_size_px(24)
                 .with_width_and_height(256, 72)

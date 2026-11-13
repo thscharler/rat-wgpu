@@ -5,7 +5,7 @@ use rat_theme4::{StyleName, WidgetStyle, create_salsa_theme};
 use rat_wgpu::event::{WindowEventState, winit_to_crossterm_event};
 use rat_wgpu::font::{fallback_emoji_font, fallback_font};
 use rat_wgpu::wgpu::Backends;
-use rat_wgpu::{Builder, WgpuBackend};
+use rat_wgpu::{WgpuBackendBuilder, WgpuBackend};
 use rat_widget::event::{Dialog, HandleEvent, MenuOutcome, Outcome, Regular, ct_event, event_flow};
 use rat_widget::focus::{FocusBuilder, impl_has_focus};
 use rat_widget::menu::{MenuLine, MenuLineState};
@@ -88,7 +88,7 @@ impl ApplicationHandler for MinimalWinit {
         // async because wgpu
         let terminal = Terminal::new(
             futures_lite::future::block_on(
-                Builder::new()
+                WgpuBackendBuilder::new()
                     .with_fonts([
                         fallback_font().expect("fallback"),
                         fallback_emoji_font().expect("emoji"),

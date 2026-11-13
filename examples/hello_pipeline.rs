@@ -1,6 +1,6 @@
 use rat_wgpu::font::{CellBox, fallback_emoji_font, fallback_font};
 use rat_wgpu::postprocessor::{PostProcessor, PostProcessorBuilder};
-use rat_wgpu::{Builder, WgpuBackend};
+use rat_wgpu::{WgpuBackendBuilder, WgpuBackend};
 use ratatui_core::terminal::Terminal;
 use ratatui_widgets::block::Block;
 use ratatui_widgets::paragraph::{Paragraph, Wrap};
@@ -62,7 +62,7 @@ impl ApplicationHandler for App {
         self.backend = Some(
             Terminal::new(
                 futures_lite::future::block_on(
-                    Builder::new()
+                    WgpuBackendBuilder::new()
                         .with_postprocessor(Box::new(PipelineBuilder::default()))
                         .with_fonts([
                             fallback_font().expect("fallback"),

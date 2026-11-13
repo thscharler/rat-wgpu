@@ -35,7 +35,7 @@ use wgpu::{
 const CACHE_WIDTH: u32 = 1800;
 const CACHE_HEIGHT: u32 = 1200;
 
-pub struct Builder {
+pub struct WgpuBackendBuilder {
     postprocessor: Box<dyn PostProcessorBuilder>,
     fonts: Fonts,
     backends: Backends,
@@ -54,7 +54,7 @@ pub struct Builder {
     cursor_color: Color,
 }
 
-impl Default for Builder {
+impl Default for WgpuBackendBuilder {
     fn default() -> Self {
         Self {
             postprocessor: Box::new(DefaultPostProcessorBuilder::default()),
@@ -77,13 +77,13 @@ impl Default for Builder {
     }
 }
 
-impl Builder {
+impl WgpuBackendBuilder {
     pub fn new() -> Self {
         Self::default()
     }
 }
 
-impl Builder {
+impl WgpuBackendBuilder {
     /// New builder with some postprocessing after the rendering.
     pub fn with_postprocessor(mut self, builder: Box<dyn PostProcessorBuilder>) -> Self {
         self.postprocessor = builder;
@@ -257,7 +257,7 @@ impl Builder {
     }
 }
 
-impl Builder {
+impl WgpuBackendBuilder {
     /// Build a new backend with the provided surface target - e.g. a winit
     /// `Window`.
     pub async fn build_with_target<'s>(
@@ -284,7 +284,7 @@ impl Builder {
 
     /// Build a new backend from this builder with the supplied surface. You
     /// almost certainly want to call this with the instance you used to create
-    /// the provided surface - see [`Builder::with_instance`]. If one is not
+    /// the provided surface - see [`WgpuBackendBuilder::with_instance`]. If one is not
     /// provided, a default instance will be created.
     pub async fn build_with_surface<'s>(
         self,
