@@ -3,7 +3,7 @@ use crate::backend::builder::{build_img_bindings, build_wgpu_state};
 use crate::backend::plan_cache::PlanCache;
 use crate::backend::surface::RenderSurface;
 use crate::backend::{
-    ImageInfo, ImgVertexMember, NULL_CELL, RenderInfo, Rendered, TextBgVertexMember,
+    CellGlyphs, ImageInfo, ImgVertexMember, NULL_CELL, RenderInfo, TextBgVertexMember,
     TextVertexMember, TuiSurface, WgpuAtlas, WgpuBase, WgpuImage, WgpuImages, WgpuPipeline,
     WgpuVertices,
 };
@@ -62,7 +62,7 @@ pub struct WgpuBackend<'s> {
     pub(super) tui_surface: TuiSurface,
 
     // positioned glyphs.
-    pub(super) rendered: Vec<Rendered>,
+    pub(super) cell_glyphs: Vec<CellGlyphs>,
 
     // temporaries for shaping
     pub(super) tmp_plan_cache: PlanCache,
@@ -92,7 +92,7 @@ impl<'s> Backend for WgpuBackend<'s> {
             &self.fonts,
             &mut content,
             &mut self.tui_surface,
-            &mut self.rendered,
+            &mut self.cell_glyphs,
         );
         Ok(())
     }
@@ -156,7 +156,7 @@ impl<'s> Backend for WgpuBackend<'s> {
         self.tui_surface.cells.clear();
         self.tui_surface.cell_font.clear();
         self.tui_surface.dirty_rows.clear();
-        self.rendered.clear();
+        self.cell_glyphs.clear();
         self.tui_surface.fast_blinking.clear();
         self.tui_surface.slow_blinking.clear();
         self.tui_surface.cursor = (0, 0);
@@ -262,7 +262,7 @@ impl<'s> Backend for WgpuBackend<'s> {
             bounds,
             &self.fonts,
             &mut self.tui_surface,
-            &mut self.rendered,
+            &mut self.cell_glyphs,
             &mut self.wgpu_atlas,
             &self.wgpu_base.queue,
             &mut self.tmp_plan_cache,
@@ -274,7 +274,7 @@ impl<'s> Backend for WgpuBackend<'s> {
         append_dirty_rows(
             &mut self.tui_surface,
             self.wgpu_post_process.as_ref(),
-            &self.rendered,
+            &self.cell_glyphs,
             &mut self.wgpu_vertices,
         );
 
@@ -414,7 +414,7 @@ impl<'s> WgpuBackend<'s> {
         rebuild_surface(
             self.fonts.cell_box(),
             &mut self.tui_surface,
-            &mut self.rendered,
+            &mut self.cell_glyphs,
             &mut self.wgpu_base,
             &mut self.wgpu_atlas,
             self.wgpu_post_process.as_mut(),
@@ -473,7 +473,7 @@ impl<'s> WgpuBackend<'s> {
         rebuild_surface(
             self.fonts.cell_box(),
             &mut self.tui_surface,
-            &mut self.rendered,
+            &mut self.cell_glyphs,
             &mut self.wgpu_base,
             &mut self.wgpu_atlas,
             self.wgpu_post_process.as_mut(),
@@ -502,7 +502,7 @@ impl<'s> WgpuBackend<'s> {
         rebuild_surface(
             self.fonts.cell_box(),
             &mut self.tui_surface,
-            &mut self.rendered,
+            &mut self.cell_glyphs,
             &mut self.wgpu_base,
             &mut self.wgpu_atlas,
             self.wgpu_post_process.as_mut(),
@@ -529,7 +529,7 @@ impl<'s> WgpuBackend<'s> {
             bounds,
             self.fonts.cell_box(),
             &mut self.tui_surface,
-            &self.rendered,
+            &self.cell_glyphs,
             &mut self.wgpu_vertices,
         );
 
@@ -697,7 +697,7 @@ impl<'s> WgpuBackend<'s> {
 fn rebuild_surface(
     cell_box: CellBox,
     tui_surface: &mut TuiSurface,
-    rendered: &mut Vec<Rendered>,
+    rendered: &mut Vec<CellGlyphs>,
     wgpu_base: &mut WgpuBase,
     wgpu_atlas: &mut WgpuAtlas,
     wgpu_post_process: &mut dyn PostProcessor,
@@ -961,7 +961,7 @@ fn draw_tui(
     fonts: &Fonts,
     content: &mut dyn Iterator<Item = (u16, u16, &'_ Cell)>,
     tui_surface: &mut TuiSurface,
-    rendered: &mut Vec<Rendered>,
+    cell_glyphs: &mut Vec<CellGlyphs>,
 ) {
     tui_surface
         .cells
@@ -986,9 +986,9 @@ fn draw_tui(
 
     let cell_box = fonts.cell_box();
 
-    rendered.resize_with(
+    cell_glyphs.resize_with(
         bounds.height as usize * bounds.width as usize,
-        Rendered::default,
+        CellGlyphs::default,
     );
 
     for (x, y, cell) in content {
@@ -1002,8 +1002,10 @@ fn draw_tui(
             .slow_blinking
             .set(index, cell.modifier.contains(Modifier::SLOW_BLINK));
 
-        // every other cell any of the glyphs has touched is dirty now.
-        for (rx, ry, _glyph_id, render_info) in &rendered[index] {
+        // the glyphs of a cell may go beyond the cell-bounds.
+        // every cell touched by one of the glyphs in the current cell
+        // needs to be dirty now.
+        for (rx, ry, _glyph_id, render_info) in &cell_glyphs[index] {
             let glyph_pos = cell_box.cell_pos(*rx, *ry, bounds);
             let glyph_pos2 = cell_box.cell_pos(
                 *rx + render_info.cached.width as i32,
@@ -1021,10 +1023,12 @@ fn draw_tui(
             }
         }
 
+        // fill our surface
         tui_surface.cells[index] = cell.clone();
         tui_surface.cell_font[index] = fonts.font_for_cell(cell);
         tui_surface.dirty_cells.set(index, true);
 
+        // wide chars
         let new_symbol_width = tui_surface.cells[index]
             .symbol()
             .chars()
@@ -1072,7 +1076,7 @@ fn draw_tui(
                     // existing image differs in render parameters.
                     tui_surface.dirty_img.push(img_info);
                 } else {
-                    // any row the image covers is marked as dirty.
+                    // any row the image covers is already marked as dirty.
                     let img_pos =
                         cell_box.cell_pos(img_info.view_rect.0, img_info.view_rect.1, bounds);
                     let img_pos2 = cell_box.cell_pos(
@@ -1127,14 +1131,13 @@ fn flush_tui(
     bounds: ratatui_core::layout::Size,
     fonts: &Fonts,
     tui_surface: &mut TuiSurface,
-    rendered: &mut Vec<Rendered>,
+    cell_glyphs: &mut Vec<CellGlyphs>,
     wgpu_atlas: &mut WgpuAtlas,
     queue: &Queue,
-    //
-    tmp_plan_cache: &mut PlanCache,
-    tmp_rowbuf: &mut String,
-    tmp_rowbuf_to_cell: &mut Vec<u16>,
-    tmp_buffer: &mut UnicodeBuffer,
+    shape_plan: &mut PlanCache,
+    row_bytes: &mut String,           // row as a string
+    row_bytes_to_cell: &mut Vec<u16>, // maps each byte of the string back to the cell.
+    uni_buffer: &mut UnicodeBuffer,
 ) {
     // always show cursor on flush.
     tui_surface.cursor_showing = true;
@@ -1145,8 +1148,10 @@ fn flush_tui(
         return;
     }
 
+    // iterate rows
     for (row_idx, row_cells) in tui_surface.cells.chunks(bounds.width as usize).enumerate() {
         if !tui_surface.dirty_rows[row_idx] {
+            // skip early
             continue;
         }
 
@@ -1156,76 +1161,81 @@ fn flush_tui(
         // resolution, then maps bytes for the string to their associated cell index. It
         // also maps the row's cell index to the font that can source all glyphs for
         // that cell.
-        tmp_rowbuf.clear();
-        tmp_rowbuf_to_cell.clear();
+        row_bytes.clear();
+        row_bytes_to_cell.clear();
 
         for (cell_idx, cell) in row_cells.iter().enumerate() {
             if !matches!(cell.diff_option, CellDiffOption::Skip) {
-                tmp_rowbuf.push_str(cell.symbol());
-                tmp_rowbuf_to_cell.resize(
-                    tmp_rowbuf_to_cell.len() + cell.symbol().len(),
+                row_bytes.push_str(cell.symbol());
+                row_bytes_to_cell.resize(
+                    row_bytes_to_cell.len() + cell.symbol().len(),
                     cell_idx as u16,
                 );
             }
 
+            // reset cell bidi remapping.
             tui_surface.cell_remap[row_offset + cell_idx] = cell_idx as u16;
         }
 
         // run text shaping
-        let bidi = ParagraphBidiInfo::new(&tmp_rowbuf, None);
+        let bidi = ParagraphBidiInfo::new(&row_bytes, None);
         let (levels, runs) = bidi.visual_runs(0..bidi.levels.len());
 
-        // when bidi kicks in dirty_cell ceases to work...
+        // when bidi kicks in dirty_cell ceases to work.
+        // render the full run
         if runs.len() > 1 {
             for cell_idx in 0..bounds.width as usize {
                 tui_surface.dirty_cells.set(row_offset + cell_idx, true);
             }
         }
 
-        // rebuild rendered glyphs from scratch
+        // clear glyph cache for dirty cells.
         for cell_idx in 0..bounds.width as usize {
             if tui_surface.dirty_cells[row_offset + cell_idx] {
-                rendered[row_offset + cell_idx].clear();
+                cell_glyphs[row_offset + cell_idx].clear();
             }
         }
 
         let mut current_font_id = None;
         let mut current_level = None;
         let mut current_cell_idx = -1;
+        // iterate runs with same bidi level
         for (level, range) in runs.into_iter().map(|run| (levels[run.start], run)) {
-            let bidi_run_chars = &tmp_rowbuf[range.clone()];
-            let bidi_run_cells = &tmp_rowbuf_to_cell[range.clone()];
-            let min_cell_idx = *bidi_run_cells.first().expect("first") as usize;
-            let max_cell_idx = *bidi_run_cells.last().expect("last") as usize;
+            let run_row_bytes = &row_bytes[range.clone()];
+            let run_row_bytes_to_cell = &row_bytes_to_cell[range.clone()];
+            let min_cell_idx = *run_row_bytes_to_cell.first().expect("first") as usize;
+            let max_cell_idx = *run_row_bytes_to_cell.last().expect("last") as usize;
+
             let mut start_cell_idx = None;
 
-            for (ch_idx, ch) in bidi_run_chars.char_indices() {
+            for (ch_idx, ch) in run_row_bytes.char_indices() {
                 if ch.general_category() == GeneralCategory::Format {
                     // skip Format, no longer needed after bidi.
                     continue;
                 }
 
-                let cell_idx = bidi_run_cells[ch_idx] as usize;
+                let cell_idx = run_row_bytes_to_cell[ch_idx] as usize;
 
+                // break up the run if the font changes.
                 let font_id = tui_surface.cell_font[row_offset + cell_idx];
                 if let (Some(current_font_id), Some(current_level)) =
                     (current_font_id, current_level)
                     && (font_id != current_font_id || level != current_level)
                 {
-                    let mut buffer = mem::take(tmp_buffer);
+                    let mut buffer = mem::take(uni_buffer);
                     let current_font = fonts.get_by_id(current_font_id);
                     let current_face = current_font.as_face();
 
-                    *tmp_buffer = shape(
+                    *uni_buffer = shape(
                         row_idx,
                         row_cells,
                         &tui_surface.dirty_cells[row_offset..row_offset + bounds.width as usize],
                         &tui_surface.cell_remap[row_offset..row_offset + bounds.width as usize],
-                        &tmp_rowbuf,
-                        &tmp_rowbuf_to_cell,
+                        &row_bytes,
+                        &row_bytes_to_cell,
                         shape_with_plan(
                             &current_face,
-                            tmp_plan_cache.get(current_font_id, current_font, &mut buffer),
+                            shape_plan.get(current_font_id, current_font, &mut buffer),
                             buffer,
                         ),
                         current_font,
@@ -1233,7 +1243,7 @@ fn flush_tui(
                         fonts.cell_box(),
                         tui_surface.cursor_visible,
                         tui_surface.cursor,
-                        &mut rendered[row_offset..row_offset + bounds.width as usize],
+                        &mut cell_glyphs[row_offset..row_offset + bounds.width as usize],
                         wgpu_atlas,
                         queue,
                     );
@@ -1257,6 +1267,7 @@ fn flush_tui(
                     start_cell_idx = Some(current_cell_idx);
                 }
 
+                // build up the mapping for rtl text
                 if level.is_rtl() {
                     // rtl flip visible cell index for this run.
                     let start_cell_idx = start_cell_idx.expect("start_cell_idx");
@@ -1268,6 +1279,7 @@ fn flush_tui(
                         tui_surface.cursor_style = tui_surface.cursor_style.to_rtl();
                     }
 
+                    // which visual cell shows this cell_idx
                     tui_surface.cell_remap[row_offset + cell_idx] = view_idx as u16;
                 } else {
                     if (cell_idx as u16, row_idx as u16) == tui_surface.cursor {
@@ -1276,27 +1288,28 @@ fn flush_tui(
                     tui_surface.cell_remap[row_offset + cell_idx] = current_cell_idx as u16;
                 }
 
-                tmp_buffer.add(ch, (range.start + ch_idx) as u32);
+                uni_buffer.add(ch, (range.start + ch_idx) as u32);
 
                 current_font_id = Some(font_id);
                 current_level = Some(level);
             }
         }
 
+        // last stretch of the last run.
         if let Some(current_font_id) = current_font_id {
-            let mut buffer = mem::take(tmp_buffer);
+            let mut buffer = mem::take(uni_buffer);
             let current_font = fonts.get_by_id(current_font_id);
             let current_face = current_font.as_face();
-            *tmp_buffer = shape(
+            *uni_buffer = shape(
                 row_idx,
                 row_cells,
                 &tui_surface.dirty_cells[row_offset..row_offset + bounds.width as usize],
                 &tui_surface.cell_remap[row_offset..row_offset + bounds.width as usize],
-                &tmp_rowbuf,
-                tmp_rowbuf_to_cell,
+                &row_bytes,
+                row_bytes_to_cell,
                 shape_with_plan(
                     &current_face,
-                    tmp_plan_cache.get(current_font_id, current_font, &mut buffer),
+                    shape_plan.get(current_font_id, current_font, &mut buffer),
                     buffer,
                 ),
                 current_font,
@@ -1304,7 +1317,7 @@ fn flush_tui(
                 fonts.cell_box(),
                 tui_surface.cursor_visible,
                 tui_surface.cursor,
-                &mut rendered[row_offset..row_offset + bounds.width as usize],
+                &mut cell_glyphs[row_offset..row_offset + bounds.width as usize],
                 wgpu_atlas,
                 queue,
             );
@@ -1326,27 +1339,32 @@ fn flush_tui(
 // the final result more predictable.
 fn shape(
     row_idx: usize,
-    row: &[Cell],
-    dirty_cells: &BitSlice,
-    cell_remap: &[u16],
-    buf_str: &str,
-    buf_to_cell: &[u16],
+    row: &[Cell],           // cells for one row
+    dirty_cells: &BitSlice, // dirty cells for one row
+    cell_remap: &[u16],     // cell bidi remapping for one row.
+    buf_str: &str,          // bytes for one row
+    buf_to_cell: &[u16],    // byte index to cell
     buffer: GlyphBuffer,
     font: &Font,
     metrics: &Face<'_>,
     cell_box: CellBox,
     cursor_visible: bool,
     cursor: (u16, u16),
-    rendered: &mut [Rendered],
+    cell_glyphs: &mut [CellGlyphs], // glyphs for each cell of one row.
     wgpu_atlas: &mut WgpuAtlas,
     queue: &Queue,
 ) -> UnicodeBuffer {
-    let mut x = 0;
-    let mut default_chars_wide = 1;
+    // first codepoints' width.
+    let mut first_chars_wide = 1;
+    // width of the current codepoint.
     #[allow(unused_assignments)]
     let mut chars_wide = 1;
-    let mut last_cell_idx: Option<usize> = None;
-    let mut last_advance = 0;
+    // glyphs for what cell.
+    let mut active_cell_idx: Option<usize> = None;
+    // accumulated x-position for the cell.
+    let mut active_x = 0;
+    // accumulated advance for the cell.
+    let mut active_advance = 0;
     for (info, position) in buffer
         .glyph_infos()
         .iter()
@@ -1365,68 +1383,82 @@ fn shape(
             .unwrap_or_default();
 
         // Every cell has it's defined position on the grid.
-        // This position is used as a starting point from which
+        // This position is used as a starting point from where
         // every glyph in the cell is positioned.
-        let mut first_glyph = false;
-        if last_cell_idx != Some(cell_idx) {
-            x = cell_remap[cell_idx] as i32 * cell_box.width as i32;
+
+        // first glyph for the cell.
+        let mut is_first_glyph = false;
+        if active_cell_idx != Some(cell_idx) {
+            // new cell, set the cells x position. bidi remap.
+            active_x = cell_remap[cell_idx] as i32 * cell_box.width as i32;
             // zero width are still 1 cell wide.
             // there is KHMER SIGN BEYYAL with width 3.
             // we ignore that one completely.
-            default_chars_wide = ch.width().unwrap_or(1).max(1).min(2);
-            chars_wide = default_chars_wide;
+            first_chars_wide = ch.width().unwrap_or(1).max(1).min(2);
+            chars_wide = first_chars_wide;
             assert_ne!(chars_wide, 0);
-            last_advance = 0;
-            first_glyph = true;
+            active_advance = 0;
+            is_first_glyph = true;
         } else {
+            // cell x position changes with every rendered glyph.
+
             // zero width are still 1 cell wide.
             // there is KHMER SIGN BEYYAL with width 3.
             // we ignore that one completely.
-            chars_wide = ch.width().unwrap_or(default_chars_wide).max(1).min(2);
+            chars_wide = ch.width().unwrap_or(first_chars_wide).max(1).min(2);
             assert_ne!(chars_wide, 0);
         }
 
-        // if we have a combining '.undef'. skip it completely.
-        if last_cell_idx == Some(cell_idx) {
+        if !is_first_glyph {
             if ch.general_category_group() == GeneralCategoryGroup::Mark && info.glyph_id == 0 {
+                // we have a combining codepoint without glyph. skip it completely.
                 continue;
             }
         }
 
+        // block characters need a different scaling to fit.
         let block_char = (ch as u32) >= 0x2500 && (ch as u32) <= 0x259F;
-        let Some(advance_scale) =
+        // actual scaling depends on the font and can distort the
+        // glyph to fit in the cell-box.
+        let Some(advance_scale_x) =
             font.scale_x(GlyphId(info.glyph_id as u16), block_char, chars_wide as u32)
         else {
+            // skip invalid glyphs
             continue;
         };
         let advance_scale_y = font.scale_y(info.glyph_id as u16, block_char);
+        let glyph_advance_x = (position.x_advance as f32 * advance_scale_x) as i32;
+        let glyph_offset_x = (position.x_offset as f32 * advance_scale_x) as i32;
 
-        let basey = row_idx as i32 * cell_box.height as i32
+        // x,y position for the glyph
+        let glyph_y = row_idx as i32 * cell_box.height as i32
             + (position.y_offset as f32 * advance_scale_y) as i32;
-
-        let glyph_advance = (position.x_advance as f32 * advance_scale) as i32;
-        let glyph_offset = (position.x_offset as f32 * advance_scale) as i32;
-
-        // combining glyph
-        let basex;
-        if last_cell_idx == Some(cell_idx) {
-            if glyph_offset < 0 {
-                basex = x + glyph_offset;
-                last_advance += glyph_advance;
-                x += glyph_advance;
+        let glyph_x;
+        if !is_first_glyph {
+            // TODO: simplify
+            // combining glyph for the same cell.
+            // two variants seem to exist.
+            if glyph_offset_x < 0 {
+                // a negative offset corrects the base glyph.
+                glyph_x = active_x + glyph_offset_x;
+                active_advance += glyph_advance_x;
+                active_x += glyph_advance_x;
             } else {
-                basex = x + glyph_offset - last_advance;
-                last_advance += glyph_advance;
-                x += glyph_advance;
+                // a positive offset wants to be offset from the
+                // start of the cell-box.
+                glyph_x = active_x + glyph_offset_x - active_advance;
+                active_advance += glyph_advance_x;
+                active_x += glyph_advance_x;
             }
         } else {
-            basex = x + glyph_offset;
-            last_advance = glyph_advance;
-            x += glyph_advance;
+            glyph_x = active_x + glyph_offset_x;
+            active_advance = glyph_advance_x;
+            active_x += glyph_advance_x;
         }
 
-        last_cell_idx = Some(cell_idx);
+        active_cell_idx = Some(cell_idx);
 
+        // Key for the glyph atlas.
         let key = Key {
             style: cell
                 .modifier
@@ -1435,27 +1467,26 @@ fn shape(
             width: chars_wide as u8,
             font: font.id(),
         };
-
-        let cached =
+        let cached_glyph =
             wgpu_atlas
                 .cached
                 .get(&key, chars_wide as u32 * cell_box.width, cell_box.height);
 
         let mut view_modifier = cell.modifier;
-        if !first_glyph {
+        if !is_first_glyph {
             view_modifier.set(Modifier::UNDERLINED, false);
             view_modifier.set(Modifier::CROSSED_OUT, false);
         }
 
         let cursor_pos =
-            if first_glyph && cursor_visible && (cell_idx as u16, row_idx as u16) == cursor {
-                font.underline_metrics(cell_box.ascender, cached.height)
+            if is_first_glyph && cursor_visible && (cell_idx as u16, row_idx as u16) == cursor {
+                font.underline_metrics(cell_box.ascender, cached_glyph.height)
             } else {
                 (0, 0)
             };
 
         let underline_pos = if view_modifier.contains(Modifier::UNDERLINED) {
-            font.underline_metrics(cell_box.ascender, cached.height)
+            font.underline_metrics(cell_box.ascender, cached_glyph.height)
         } else {
             (0, 0)
         };
@@ -1465,13 +1496,13 @@ fn shape(
             (0, 0)
         };
 
-        if cached.cached() {
-            rendered[cell_idx].push((
-                basex,
-                basey,
+        if cached_glyph.cached() {
+            cell_glyphs[cell_idx].push((
+                glyph_x,
+                glyph_y,
                 GlyphId(info.glyph_id as _),
                 RenderInfo {
-                    cached: *cached,
+                    cached: *cached_glyph,
                     fg: cell.fg,
                     bg: cell.bg,
                     modifier: view_modifier,
@@ -1484,19 +1515,22 @@ fn shape(
                 },
             ));
 
+            // cache hit!
             continue;
         }
 
         let is_emoji =
             ch.is_emoji_char() && ch.general_category_group() != GeneralCategoryGroup::Number;
+        let is_bold = view_modifier.contains(Modifier::BOLD);
+        let is_italic = view_modifier.contains(Modifier::ITALIC);
 
         let (cached, image) = rasterize_glyph(
-            cached,
+            cached_glyph,
             &metrics,
             info,
-            view_modifier.contains(Modifier::BOLD),
-            view_modifier.contains(Modifier::ITALIC),
-            advance_scale,
+            is_bold,
+            is_italic,
+            advance_scale_x,
             advance_scale_y,
             cell_box.ascender,
             is_emoji,
@@ -1508,9 +1542,9 @@ fn shape(
         // remember colored flag for the glyph.
         wgpu_atlas.cached.update_colored(&key, cached.color);
 
-        rendered[cell_idx].push((
-            basex,
-            basey,
+        cell_glyphs[cell_idx].push((
+            glyph_x,
+            glyph_y,
             GlyphId(info.glyph_id as _),
             RenderInfo {
                 cached,
@@ -1559,7 +1593,7 @@ fn flush_blink(
     bounds: ratatui_core::layout::Size,
     cell_box: CellBox,
     tui_surface: &mut TuiSurface,
-    rendered: &Vec<Rendered>,
+    rendered: &Vec<CellGlyphs>,
     wgpu_vertices: &mut WgpuVertices,
 ) {
     wgpu_vertices.clear();
@@ -1647,7 +1681,7 @@ fn flush_blink(
 fn append_dirty_rows(
     tui_surface: &mut TuiSurface,
     wgpu_post_process: &dyn PostProcessor,
-    rendered: &Vec<Rendered>,
+    rendered: &Vec<CellGlyphs>,
     wgpu_vertices: &mut WgpuVertices,
 ) {
     if wgpu_post_process.needs_update()
@@ -1723,7 +1757,7 @@ fn append_rendered_image(
 
 fn append_rendered(
     tui_surface: &TuiSurface,
-    to_render: &Rendered,
+    to_render: &CellGlyphs,
     index_offset: &mut u32,
     vertices: &mut WgpuVertices,
 ) {

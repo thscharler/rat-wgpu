@@ -1,5 +1,4 @@
 /// Font rasterize.
-
 use crate::font::outline::{Outline, Painter};
 use crate::text_atlas::{CacheRect, Entry};
 use bitvec::order::Lsb0;
@@ -10,13 +9,13 @@ use rustybuzz::ttf_parser::{
 };
 use unicode_properties::GeneralCategory;
 
-/// Create the rasterized image for the glyph. 
+/// Create the rasterized image for the glyph.
 pub(crate) fn rasterize_glyph(
     cached: Entry,
     face: &rustybuzz::Face,
     info: &rustybuzz::GlyphInfo,
-    bold: bool,
-    italic: bool,
+    is_bold: bool,
+    is_italic: bool,
     advance_scale: f32,
     advance_scale_y: f32,
     mut ascender: u32,
@@ -28,7 +27,7 @@ pub(crate) fn rasterize_glyph(
     let computed_offset_x;
     let computed_offset_y;
 
-    let scale;
+    let scale_x;
     let scale_y;
     if is_fallback && block_char {
         // block-chars must always scale according to the originating font.
@@ -39,7 +38,7 @@ pub(crate) fn rasterize_glyph(
         computed_offset_y = 0.0;
 
         ascender = (face.ascender() as f32 * advance_scale_y) as u32;
-        scale = advance_scale * 2.0;
+        scale_x = advance_scale * 2.0;
         scale_y = advance_scale_y * 2.0;
     } else if is_fallback {
         // glyphs from a fallback font will probably not fit.
@@ -54,9 +53,11 @@ pub(crate) fn rasterize_glyph(
         computed_offset_x = (cached.width as f32 - actual_width as f32 * advance_scale) / 2.0;
         computed_offset_y = 0.0;
 
-        scale = advance_scale * 2.0;
+        scale_x = advance_scale * 2.0;
         scale_y = advance_scale_y * 2.0;
     } else if !face.is_monospaced() {
+        // glyphs from a variable width font will not fit anyway.
+        // render them centered in the cell-box.
         let actual_width = face
             .glyph_hor_advance(GlyphId(info.glyph_id as u16))
             .unwrap_or_default();
@@ -64,7 +65,7 @@ pub(crate) fn rasterize_glyph(
         computed_offset_x = (cached.width as f32 - actual_width as f32 * advance_scale) / 2.0;
         computed_offset_y = 0.0;
 
-        scale = advance_scale * 2.0;
+        scale_x = advance_scale * 2.0;
         scale_y = advance_scale_y * 2.0;
     } else {
         // regular fonts will probably be from one font family and therefore have
@@ -74,11 +75,12 @@ pub(crate) fn rasterize_glyph(
         computed_offset_x = 0.0;
         computed_offset_y = 0.0;
 
-        scale = advance_scale * 2.0;
+        scale_x = advance_scale * 2.0;
         scale_y = advance_scale_y * 2.0;
     }
 
-    let skew = if !emoji && !face.is_italic() && italic {
+    let skew = if is_italic && !emoji && !face.is_italic() {
+        // create oblique variant ourselves.
         Transform::new(
             /* scale x */ 1.0,
             /* skew x */ 0.0,
@@ -92,7 +94,9 @@ pub(crate) fn rasterize_glyph(
     };
 
     if info.glyph_id == 0 {
-        // the glyph provided by the font is ugly most of the time.
+        // unknown glyph for the font.
+        // the fallback glyph provided by the font is ugly most of the time.
+        // create some rect based on the font-box.
         let width = cached.width as usize;
         let height = cached.height as usize;
 
@@ -143,7 +147,7 @@ pub(crate) fn rasterize_glyph(
         face,
         &mut target,
         skew,
-        scale,
+        scale_x,
         ascender as f32 * 2.0 + computed_offset_y,
         computed_offset_x,
     );
@@ -215,7 +219,7 @@ pub(crate) fn rasterize_glyph(
         } else {
             0.
         };
-        let x_off = x_off * scale + computed_offset_x;
+        let x_off = x_off * scale_x + computed_offset_x;
         let y_off = ascender as f32 * 2.0 + computed_offset_y;
 
         let mut target = DrawTarget::from_backing(
@@ -224,7 +228,7 @@ pub(crate) fn rasterize_glyph(
             &mut image[..],
         );
         target.set_transform(
-            &Transform::scale(scale, -scale_y)
+            &Transform::scale(scale_x, -scale_y)
                 .then(&skew)
                 .then_translate((x_off, y_off).into()),
         );
@@ -235,12 +239,12 @@ pub(crate) fn rasterize_glyph(
             &DrawOptions::default(),
         );
 
-        if !face.is_bold() && bold {
+        if is_bold && !face.is_bold() {
             target.stroke(
                 &path,
                 &raqote::Source::Solid(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255)),
                 &StrokeStyle {
-                    width: 1.5 / scale,
+                    width: 1.5 / scale_x,
                     ..Default::default()
                 },
                 &DrawOptions::new(),
@@ -251,7 +255,7 @@ pub(crate) fn rasterize_glyph(
                 &path,
                 &raqote::Source::Solid(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255)),
                 &StrokeStyle {
-                    width: 1.0 / scale,
+                    width: 1.0 / scale_x,
                     ..Default::default()
                 },
                 &DrawOptions::new(),
@@ -262,7 +266,7 @@ pub(crate) fn rasterize_glyph(
                 &path,
                 &raqote::Source::Solid(SolidSource::from_unpremultiplied_argb(255, 255, 255, 255)),
                 &StrokeStyle {
-                    width: 1.0 / scale,
+                    width: 1.0 / scale_x,
                     ..Default::default()
                 },
                 &DrawOptions::new(),

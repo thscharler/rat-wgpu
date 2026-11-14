@@ -510,7 +510,7 @@ impl WgpuBackendBuilder {
                 slow_blink_divisor: self.slow_blink,
                 slow_blink_showing: true,
             },
-            rendered: Default::default(),
+            cell_glyphs: Default::default(),
 
             tmp_plan_cache: PlanCache::new(shape_plan_count.max(2)),
             tmp_buffer: UnicodeBuffer::new(),

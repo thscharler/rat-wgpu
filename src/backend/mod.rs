@@ -48,10 +48,9 @@ struct ImageInfo {
     uv_transform: Transform,
 }
 
-/// Map from (x, y, glyph) -> (cell index, cache entry).
-/// We use an IndexMap because we want a consistent rendering order for
-/// vertices.
-type Rendered = Vec<(i32, i32, GlyphId, RenderInfo)>;
+/// List of glyphs for one cell. 
+/// Holds the offset for each glyph, some glyph-id and rendering details. 
+type CellGlyphs = Vec<(i32, i32, GlyphId, RenderInfo)>;
 
 struct TuiSurface {
     // communication with the application. can run in parallel
