@@ -541,6 +541,7 @@ impl WgpuBackendBuilder {
                 handles: Default::default(),
                 img: Default::default(),
             },
+            wgpu_post_process_changed: false,
             wgpu_post_process: post_process,
             wgpu_pipeline: WgpuPipeline {
                 sampler,

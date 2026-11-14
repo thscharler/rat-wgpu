@@ -75,6 +75,7 @@ pub struct WgpuBackend<'s> {
     pub(super) wgpu_vertices: WgpuVertices,
     pub(super) wgpu_atlas: WgpuAtlas,
     pub(super) wgpu_images: WgpuImages,
+    pub(super) wgpu_post_process_changed: bool,
     pub(super) wgpu_post_process: Box<dyn PostProcessor + 'static>,
     pub(super) wgpu_pipeline: WgpuPipeline,
 }
@@ -285,10 +286,12 @@ impl<'s> Backend for WgpuBackend<'s> {
             &self.wgpu_base,
             &self.wgpu_images,
             &self.wgpu_pipeline,
+            self.wgpu_post_process_changed,
             self.wgpu_post_process.as_mut(),
             &self.wgpu_vertices,
         );
 
+        self.wgpu_post_process_changed = false;
         self.wgpu_vertices.clear();
         drop_images(&mut self.tui_surface, &mut self.wgpu_images);
 
@@ -390,6 +393,7 @@ impl<'s> WgpuBackend<'s> {
             &self.wgpu_base.surface_config,
         );
         self.wgpu_post_process = post_process;
+        self.wgpu_post_process_changed = true;
     }
 
     /// Resize the rendering surface.
@@ -540,9 +544,12 @@ impl<'s> WgpuBackend<'s> {
             &self.wgpu_base,
             &self.wgpu_images,
             &self.wgpu_pipeline,
+            self.wgpu_post_process_changed,
             self.wgpu_post_process.as_mut(),
             &self.wgpu_vertices,
         );
+
+        self.wgpu_post_process_changed = false;
 
         self.wgpu_vertices.clear();
     }
@@ -771,10 +778,11 @@ fn render(
     base: &WgpuBase,
     images: &WgpuImages,
     pipeline: &WgpuPipeline,
+    post_process_changed: bool,
     post_process: &mut dyn PostProcessor,
     vertices: &WgpuVertices,
 ) {
-    if vertices.is_empty() && !post_process.needs_update() {
+    if vertices.is_empty() && !post_process.needs_update() && !post_process_changed {
         return;
     }
 

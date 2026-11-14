@@ -13,8 +13,6 @@ categories = ["command-line-interface", "gui"]
 [features]
 default = ["winit-event", "fallback_font"]
 
-# Scale the resulting TUI to the exact window-size. Might look a bit stretched.
-scale_to_window = []
 # Add NotoSansMono-Regular as fallback font.
 fallback_font = []
 # Add NotoEmoji-Regular as default emoji font.

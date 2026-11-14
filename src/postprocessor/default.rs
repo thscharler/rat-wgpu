@@ -4,6 +4,7 @@
 
 use crate::font::CellBox;
 use crate::postprocessor::{PostProcessor, PostProcessorBuilder};
+use std::cell::Cell;
 use std::num::NonZeroU64;
 use wgpu::{
     AddressMode, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
@@ -18,22 +19,21 @@ use wgpu::{
 };
 
 #[derive(Default)]
-pub struct DefaultPostProcessorBuilder;
+pub struct DefaultPostProcessorBuilder {
+    scale_to_window: bool,
+}
 
 /// The default post-processor. Used when you don't want to perform any custom
 /// shading on the output. This just blits the composited text to the surface.
-///
-/// There is a feature flag `scale_to_window`.
-/// It decides whether you want the stretch the rendered image to fill
-/// the window or if you want to leave a small margin with the pixels
-/// that don't fit in a full cell box. The margin will be rendered in
-/// the default background color.
 pub struct DefaultPostProcessor {
     size: (u32, u32),
     uniforms: Buffer,
     bindings: BindGroupLayout,
     sampler: Sampler,
     pipeline: RenderPipeline,
+
+    scale_changed: Cell<bool>,
+    scale_to_window: bool,
 
     blitter: RenderBundle,
 }
@@ -46,6 +46,21 @@ struct Uniforms {
     preserve_aspect: u32,
     use_srgb: u32,
     _fill: u32,
+}
+
+impl DefaultPostProcessorBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Decides whether you want the stretch the rendered image to fill
+    /// the window or if you want to leave a small margin with the pixels
+    /// that don't fit in a full cell box. The margin will be rendered in
+    /// the default background color.
+    pub fn scale_to_window(mut self, scale: bool) -> Self {
+        self.scale_to_window = scale;
+        self
+    }
 }
 
 impl PostProcessorBuilder for DefaultPostProcessorBuilder {
@@ -159,6 +174,8 @@ impl PostProcessorBuilder for DefaultPostProcessorBuilder {
             bindings: layout,
             sampler,
             pipeline,
+            scale_changed: Cell::new(false),
+            scale_to_window: self.scale_to_window,
             blitter,
         })
     }
@@ -210,6 +227,17 @@ fn build_blitter(
     })
 }
 
+impl DefaultPostProcessor {
+    /// Decides whether you want the stretch the rendered image to fill
+    /// the window or if you want to leave a small margin with the pixels
+    /// that don't fit in a full cell box. The margin will be rendered in
+    /// the default background color.
+    pub fn scale_to_window(&mut self, scale: bool) {
+        self.scale_changed.set(true);
+        self.scale_to_window = scale;
+    }
+}
+
 impl PostProcessor for DefaultPostProcessor {
     fn map_to_cell(&self, scr_x: i32, scr_y: i32, font_box: CellBox) -> (u16, u16) {
         if scr_x < 0 || scr_y < 0 {
@@ -250,11 +278,6 @@ impl PostProcessor for DefaultPostProcessor {
         surface_view: &TextureView,
     ) {
         {
-            #[cfg(feature = "scale_to_window")]
-            let preserve_aspect = false;
-            #[cfg(not(feature = "scale_to_window"))]
-            let preserve_aspect = true;
-
             let mut uniforms = queue
                 .write_buffer_with(
                     &self.uniforms,
@@ -265,7 +288,7 @@ impl PostProcessor for DefaultPostProcessor {
             uniforms.copy_from_slice(bytemuck::bytes_of(&Uniforms {
                 screen_size: [surface_config.width as f32, surface_config.height as f32],
                 margin_color,
-                preserve_aspect: u32::from(preserve_aspect),
+                preserve_aspect: u32::from(self.scale_to_window),
                 use_srgb: u32::from(surface_config.format.is_srgb()),
                 _fill: 0,
             }));
@@ -286,5 +309,9 @@ impl PostProcessor for DefaultPostProcessor {
         });
 
         pass.execute_bundles(Some(&self.blitter));
+    }
+
+    fn needs_update(&self) -> bool {
+        self.scale_changed.take()
     }
 }
