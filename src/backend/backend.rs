@@ -1362,7 +1362,7 @@ fn shape(
     // glyphs for what cell.
     let mut active_cell_idx: Option<usize> = None;
     // accumulated x-position for the cell.
-    let mut active_x = 0;
+    let mut active_x0 = 0;
     // accumulated advance for the cell.
     let mut active_advance = 0;
     for (info, position) in buffer
@@ -1390,7 +1390,7 @@ fn shape(
         let mut is_first_glyph = false;
         if active_cell_idx != Some(cell_idx) {
             // new cell, set the cells x position. bidi remap.
-            active_x = cell_remap[cell_idx] as i32 * cell_box.width as i32;
+            active_x0 = cell_remap[cell_idx] as i32 * cell_box.width as i32;
             // zero width are still 1 cell wide.
             // there is KHMER SIGN BEYYAL with width 3.
             // we ignore that one completely.
@@ -1440,20 +1440,16 @@ fn shape(
             // two variants seem to exist.
             if glyph_offset_x < 0 {
                 // a negative offset corrects the base glyph.
-                glyph_x = active_x + glyph_offset_x;
-                active_advance += glyph_advance_x;
-                active_x += glyph_advance_x;
+                glyph_x = active_x0 + active_advance + glyph_offset_x;
             } else {
                 // a positive offset wants to be offset from the
                 // start of the cell-box.
-                glyph_x = active_x + glyph_offset_x - active_advance;
-                active_advance += glyph_advance_x;
-                active_x += glyph_advance_x;
+                glyph_x = active_x0 + glyph_offset_x;
             }
+            active_advance += glyph_advance_x;
         } else {
-            glyph_x = active_x + glyph_offset_x;
+            glyph_x = active_x0 + glyph_offset_x;
             active_advance = glyph_advance_x;
-            active_x += glyph_advance_x;
         }
 
         active_cell_idx = Some(cell_idx);
