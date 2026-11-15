@@ -1,3 +1,7 @@
+# 1.0.5
+
+refactor: make the builder functions sync and add async variants.
+
 # 1.0.4
 
 fix: default for scale_to_window
