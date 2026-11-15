@@ -288,7 +288,7 @@ impl PostProcessor for DefaultPostProcessor {
             uniforms.copy_from_slice(bytemuck::bytes_of(&Uniforms {
                 screen_size: [surface_config.width as f32, surface_config.height as f32],
                 margin_color,
-                preserve_aspect: u32::from(self.scale_to_window),
+                preserve_aspect: u32::from(!self.scale_to_window),
                 use_srgb: u32::from(surface_config.format.is_srgb()),
                 _fill: 0,
             }));

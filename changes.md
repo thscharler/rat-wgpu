@@ -1,3 +1,7 @@
+# 1.0.4
+
+fix: default for scale_to_window
+
 # 1.0.3
 
 something strange with crates.io. get the deleted crate version?
