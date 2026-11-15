@@ -260,7 +260,37 @@ impl WgpuBackendBuilder {
 impl WgpuBackendBuilder {
     /// Build a new backend with the provided surface target - e.g. a winit
     /// `Window`.
-    pub async fn build_with_target<'s>(
+    pub fn build_with_target<'s>(
+        self,
+        target: impl Into<SurfaceTarget<'s>>,
+    ) -> Result<WgpuBackend<'s>, Error> {
+        futures_lite::future::block_on(self.build_with_target_async(target))
+    }
+
+    /// Build a new backend from this builder with the supplied surface. You
+    /// almost certainly want to call this with the instance you used to create
+    /// the provided surface - see [`WgpuBackendBuilder::with_instance`]. If one is not
+    /// provided, a default instance will be created.
+    pub fn build_with_surface<'s>(self, surface: Surface<'s>) -> Result<WgpuBackend<'s>, Error> {
+        futures_lite::future::block_on(self.build_with_surface_async(surface))
+    }
+
+    /// Build a backend for headless operation.
+    pub fn build_headless(self) -> Result<WgpuBackend<'static>, Error> {
+        futures_lite::future::block_on(self.build_headless_async())
+    }
+
+    /// Build a backend for headless operation.
+    pub async fn build_headless_with_format(
+        self,
+        format: TextureFormat,
+    ) -> Result<WgpuBackend<'static>, Error> {
+        futures_lite::future::block_on(self.build_headless_with_format_async(format))
+    }
+
+    /// Build a new backend with the provided surface target - e.g. a winit
+    /// `Window`.
+    pub async fn build_with_target_async<'s>(
         mut self,
         target: impl Into<SurfaceTarget<'s>>,
     ) -> Result<WgpuBackend<'s>, Error> {
@@ -292,7 +322,7 @@ impl WgpuBackendBuilder {
     /// almost certainly want to call this with the instance you used to create
     /// the provided surface - see [`WgpuBackendBuilder::with_instance`]. If one is not
     /// provided, a default instance will be created.
-    pub async fn build_with_surface<'s>(
+    pub async fn build_with_surface_async<'s>(
         self,
         surface: Surface<'s>,
     ) -> Result<WgpuBackend<'s>, Error> {
@@ -300,12 +330,14 @@ impl WgpuBackendBuilder {
             .await
     }
 
-    pub async fn build_headless(self) -> Result<WgpuBackend<'static>, Error> {
+    /// Build a backend for headless operation.
+    pub async fn build_headless_async(self) -> Result<WgpuBackend<'static>, Error> {
         self.build_with_render_surface(RenderSurface::new_headless())
             .await
     }
 
-    pub async fn build_headless_with_format(
+    /// Build a backend for headless operation.
+    pub async fn build_headless_with_format_async(
         self,
         format: TextureFormat,
     ) -> Result<WgpuBackend<'static>, Error> {

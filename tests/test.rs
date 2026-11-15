@@ -28,16 +28,14 @@ fn a_z() {
     };
 
     let mut terminal = Terminal::new(
-        futures_lite::future::block_on(
-            WgpuBackendBuilder::default()
-                .with_fallback_font(Font::new(font_id).expect("Invalid font"))
-                .with_font_size_px(24)
-                .with_width_and_height(512, 72)
-                .with_bg_color(Color::White)
-                .with_fg_color(Color::Black)
-                .build_headless(),
-        )
-        .unwrap(),
+        WgpuBackendBuilder::default()
+            .with_fallback_font(Font::new(font_id).expect("Invalid font"))
+            .with_font_size_px(24)
+            .with_width_and_height(512, 72)
+            .with_bg_color(Color::White)
+            .with_fg_color(Color::Black)
+            .build_headless()
+            .unwrap(),
     )
     .unwrap();
 
@@ -88,16 +86,14 @@ fn arabic() {
     };
 
     let mut terminal = Terminal::new(
-        futures_lite::future::block_on(
-            WgpuBackendBuilder::default()
-                .with_fallback_font(Font::new(font_id).expect("Invalid font"))
-                .with_font_size_px(24)
-                .with_width_and_height(256, 72)
-                .with_bg_color(Color::White)
-                .with_fg_color(Color::Black)
-                .build_headless(),
-        )
-        .unwrap(),
+        WgpuBackendBuilder::default()
+            .with_fallback_font(Font::new(font_id).expect("Invalid font"))
+            .with_font_size_px(24)
+            .with_width_and_height(256, 72)
+            .with_bg_color(Color::White)
+            .with_fg_color(Color::Black)
+            .build_headless()
+            .unwrap(),
     )
     .unwrap();
 
@@ -147,16 +143,14 @@ fn really_wide() {
     };
 
     let mut terminal = Terminal::new(
-        futures_lite::future::block_on(
-            WgpuBackendBuilder::default()
-                .with_fallback_font(Font::new(font_id).expect("Invalid font"))
-                .with_font_size_px(24)
-                .with_width_and_height(512, 72)
-                .with_bg_color(Color::White)
-                .with_fg_color(Color::Black)
-                .build_headless(),
-        )
-        .unwrap(),
+        WgpuBackendBuilder::default()
+            .with_fallback_font(Font::new(font_id).expect("Invalid font"))
+            .with_font_size_px(24)
+            .with_width_and_height(512, 72)
+            .with_bg_color(Color::White)
+            .with_fg_color(Color::Black)
+            .build_headless()
+            .unwrap(),
     )
     .unwrap();
 
@@ -206,16 +200,14 @@ fn mixed() {
     };
 
     let mut terminal = Terminal::new(
-        futures_lite::future::block_on(
-            WgpuBackendBuilder::default()
-                .with_fallback_font(Font::new(font_id).expect("Invalid font"))
-                .with_font_size_px(24)
-                .with_width_and_height(512, 72)
-                .with_bg_color(Color::White)
-                .with_fg_color(Color::Black)
-                .build_headless(),
-        )
-        .unwrap(),
+        WgpuBackendBuilder::default()
+            .with_fallback_font(Font::new(font_id).expect("Invalid font"))
+            .with_font_size_px(24)
+            .with_width_and_height(512, 72)
+            .with_bg_color(Color::White)
+            .with_fg_color(Color::Black)
+            .build_headless()
+            .unwrap(),
     )
     .unwrap();
 
@@ -268,16 +260,14 @@ fn mixed_colors() {
     };
 
     let mut terminal = Terminal::new(
-        futures_lite::future::block_on(
-            WgpuBackendBuilder::default()
-                .with_fallback_font(Font::new(font_id).expect("Invalid font"))
-                .with_font_size_px(24)
-                .with_width_and_height(512, 72)
-                .with_bg_color(Color::White)
-                .with_fg_color(Color::Black)
-                .build_headless(),
-        )
-        .unwrap(),
+        WgpuBackendBuilder::default()
+            .with_fallback_font(Font::new(font_id).expect("Invalid font"))
+            .with_font_size_px(24)
+            .with_width_and_height(512, 72)
+            .with_bg_color(Color::White)
+            .with_fg_color(Color::Black)
+            .build_headless()
+            .unwrap(),
     )
     .unwrap();
 
@@ -334,16 +324,14 @@ fn overlap() {
     };
 
     let mut terminal = Terminal::new(
-        futures_lite::future::block_on(
-            WgpuBackendBuilder::default()
-                .with_fallback_font(Font::new(font_id).expect("Invalid font"))
-                .with_font_size_px(24)
-                .with_width_and_height(256, 72)
-                .with_bg_color(Color::White)
-                .with_fg_color(Color::Black)
-                .build_headless(),
-        )
-        .unwrap(),
+        WgpuBackendBuilder::default()
+            .with_fallback_font(Font::new(font_id).expect("Invalid font"))
+            .with_font_size_px(24)
+            .with_width_and_height(256, 72)
+            .with_bg_color(Color::White)
+            .with_fg_color(Color::Black)
+            .build_headless()
+            .unwrap(),
     )
     .unwrap();
 
@@ -427,16 +415,14 @@ fn overlap_colors() {
     };
 
     let mut terminal = Terminal::new(
-        futures_lite::future::block_on(
-            WgpuBackendBuilder::default()
-                .with_fallback_font(Font::new(font_id).expect("Invalid font"))
-                .with_font_size_px(24)
-                .with_width_and_height(256, 72)
-                .with_bg_color(Color::White)
-                .with_fg_color(Color::Black)
-                .build_headless(),
-        )
-        .unwrap(),
+        WgpuBackendBuilder::default()
+            .with_fallback_font(Font::new(font_id).expect("Invalid font"))
+            .with_font_size_px(24)
+            .with_width_and_height(256, 72)
+            .with_bg_color(Color::White)
+            .with_fg_color(Color::Black)
+            .build_headless()
+            .unwrap(),
     )
     .unwrap();
 

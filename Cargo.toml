@@ -41,6 +41,7 @@ ttf-parser = "0.25"
 unicode-bidi = "0.3"
 unicode-properties = "0.1"
 unicode-width = "0.2"
+futures-lite = "2.6.1"
 wgpu = "30.0"
 winit = { version = "0.30", optional = true }
 

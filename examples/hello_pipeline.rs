@@ -1,6 +1,6 @@
 use rat_wgpu::font::{CellBox, fallback_emoji_font, fallback_font};
 use rat_wgpu::postprocessor::{PostProcessor, PostProcessorBuilder};
-use rat_wgpu::{WgpuBackendBuilder, WgpuBackend};
+use rat_wgpu::{WgpuBackend, WgpuBackendBuilder};
 use ratatui_core::terminal::Terminal;
 use ratatui_widgets::block::Block;
 use ratatui_widgets::paragraph::{Paragraph, Wrap};
@@ -61,18 +61,16 @@ impl ApplicationHandler for App {
 
         self.backend = Some(
             Terminal::new(
-                futures_lite::future::block_on(
-                    WgpuBackendBuilder::new()
-                        .with_postprocessor(Box::new(PipelineBuilder::default()))
-                        .with_fonts([
-                            fallback_font().expect("fallback"),
-                            fallback_emoji_font().expect("emoji"),
-                        ])
-                        .with_backends("vulkan")
-                        .with_width_and_height(size.width, size.height)
-                        .build_with_target(self.window.as_ref().unwrap().clone()),
-                )
-                .unwrap(),
+                WgpuBackendBuilder::new()
+                    .with_postprocessor(Box::new(PipelineBuilder::default()))
+                    .with_fonts([
+                        fallback_font().expect("fallback"),
+                        fallback_emoji_font().expect("emoji"),
+                    ])
+                    .with_backends("vulkan")
+                    .with_width_and_height(size.width, size.height)
+                    .build_with_target(self.window.as_ref().unwrap().clone())
+                    .unwrap(),
             )
             .unwrap(),
         );
