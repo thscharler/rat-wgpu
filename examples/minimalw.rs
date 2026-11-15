@@ -159,15 +159,15 @@ impl ApplicationHandler for MinimalWinit {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
-        if let WindowEvent::CloseRequested = event {
+        let mut rr = Outcome::Continue;
+
+        let Some(ctx) = self.ctx.as_mut() else {
+            return;
+        };
+        if let WindowEvent::CloseRequested | WindowEvent::Destroyed = event {
             event_loop.exit();
             return;
         }
-
-        let Some(ctx) = self.ctx.as_mut() else { return };
-
-        let mut rr = Outcome::Continue;
-
         if let WindowEvent::Focused(f) = event {
             ctx.window_focused = f;
         }
