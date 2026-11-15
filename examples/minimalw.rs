@@ -1,7 +1,9 @@
 use crossterm::event::Event;
+use log::debug;
 use rat_theme4::palette::Colors;
 use rat_theme4::theme::SalsaTheme;
 use rat_theme4::{StyleName, WidgetStyle, create_salsa_theme};
+use rat_wgpu::cursor::Blinking;
 use rat_wgpu::event::{WindowEventState, winit_to_crossterm_event};
 use rat_wgpu::font::{fallback_emoji_font, fallback_font};
 use rat_wgpu::{WgpuBackend, WgpuBackendBuilder};
@@ -10,8 +12,11 @@ use rat_widget::focus::{FocusBuilder, impl_has_focus};
 use rat_widget::menu::{MenuLine, MenuLineState};
 use rat_widget::msgdialog::{MsgDialog, MsgDialogState};
 use rat_widget::statusline_stacked::StatusLineStacked;
+use rat_widget::text::{HasScreenCursor, impl_screen_cursor};
+use rat_widget::textarea::{TextArea, TextAreaState};
 use ratatui_core::backend::Backend;
 use ratatui_core::buffer::Buffer;
+use ratatui_core::layout;
 use ratatui_core::layout::{Constraint, Layout, Rect};
 use ratatui_core::style::Style;
 use ratatui_core::terminal::Terminal;
@@ -20,8 +25,8 @@ use ratatui_core::widgets::{StatefulWidget, Widget};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
-use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::event::{StartCause, WindowEvent};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 // application for winit.
@@ -37,11 +42,14 @@ pub struct MinimalContext {
     terminal: Terminal<WgpuBackend<'static>>,
     event_state: WindowEventState,
     font_size: u32,
+    window_focused: bool,
 }
 
 // Actual application state.
 pub struct MinimalState {
     theme: SalsaTheme,
+
+    text: TextAreaState,
     menu: MenuLineState,
     error_dlg: MsgDialogState,
     status: String,
@@ -62,6 +70,7 @@ fn main() -> anyhow::Result<()> {
         ctx: None,
         state: MinimalState {
             theme,
+            text: Default::default(),
             menu: Default::default(),
             error_dlg: Default::default(),
             status: Default::default(),
@@ -76,11 +85,31 @@ fn main() -> anyhow::Result<()> {
 }
 
 impl ApplicationHandler for MinimalWinit {
+    fn new_events(&mut self, event_loop: &ActiveEventLoop, cause: StartCause) {
+        match cause {
+            StartCause::ResumeTimeReached { .. } => {
+                if let Some(ctx) = &mut self.ctx {
+                    let mut blink = Blinking::TEXT;
+                    if ctx.window_focused {
+                        blink = blink | Blinking::CURSOR;
+                    }
+                    ctx.terminal.backend_mut().blink(blink);
+                }
+
+                event_loop.set_control_flow(ControlFlow::wait_duration(Duration::from_millis(200)));
+            }
+            _ => {}
+        }
+    }
+
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // window
         let mut attr = WindowAttributes::default();
         attr.visible = false;
         let window = Arc::new(event_loop.create_window(attr).unwrap());
+
+        // for cursor blinking
+        event_loop.set_control_flow(ControlFlow::wait_duration(Duration::from_millis(200)));
 
         let size = window.inner_size();
 
@@ -106,6 +135,7 @@ impl ApplicationHandler for MinimalWinit {
             terminal,
             event_state: Default::default(),
             font_size: 20,
+            window_focused: false,
         })
     }
 
@@ -124,6 +154,9 @@ impl ApplicationHandler for MinimalWinit {
 
         let mut rr = Outcome::Continue;
 
+        if let WindowEvent::Focused(f) = event {
+            ctx.window_focused = f;
+        }
         if let WindowEvent::Resized(size) = event {
             ctx.terminal.backend_mut().resize(size.width, size.height);
             let size = ctx
@@ -164,16 +197,25 @@ impl ApplicationHandler for MinimalWinit {
                 .draw(|frame| {
                     let area = frame.area();
                     let buf = frame.buffer_mut();
+
                     render_tui(area, buf, &mut self.state);
+
+                    let sc = self.state.screen_cursor();
+                    debug!("screen_cursor {:?}", sc);
+                    if let Some(cursor) = sc {
+                        frame.set_cursor_position(layout::Position::from(cursor));
+                    }
                 })
                 .expect("render");
+
             self.state.count = frame.count;
             self.state.last_render = ttt.elapsed().expect("duration");
         }
     }
 }
 
-impl_has_focus!(menu for MinimalState);
+impl_has_focus!(text, menu for MinimalState);
+impl_screen_cursor!(text for MinimalState);
 
 fn render_tui(area: Rect, buf: &mut Buffer, state: &mut MinimalState) {
     let layout = Layout::vertical([
@@ -187,6 +229,10 @@ fn render_tui(area: Rect, buf: &mut Buffer, state: &mut MinimalState) {
         Constraint::Fill(39),
     ])
     .split(layout[1]);
+
+    TextArea::new()
+        .styles(state.theme.style(WidgetStyle::TEXTAREA))
+        .render(layout[0], buf, &mut state.text);
 
     MenuLine::new()
         .styles(state.theme.style(WidgetStyle::MENU))
@@ -268,6 +314,7 @@ fn process_event(
     let mut focus = FocusBuilder::build_for(state);
     let f = focus.handle(event, Regular);
 
+    event_flow!(state.text.handle(event, Regular));
     event_flow!(match state.menu.handle(event, Regular) {
         MenuOutcome::Activated(0) => return Err(()),
         v => Outcome::from(v),

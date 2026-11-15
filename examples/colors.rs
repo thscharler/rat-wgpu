@@ -53,20 +53,18 @@ impl ApplicationHandler for App {
 
         self.backend = Some(
             Terminal::new(
-                futures_lite::future::block_on(
-                    WgpuBackendBuilder::new()
-                        .with_postprocessor(Box::new(CrtPostProcessorBuilder::new(
-                            CrtSettings::default(),
-                        )))
-                        .with_fonts([
-                            fallback_font().expect("fallback"),
-                            fallback_emoji_font().expect("emoji"),
-                        ])
-                        .with_backends("vulkan")
-                        .with_width_and_height(size.width, size.height)
-                        .build_with_target(self.window.as_ref().unwrap().clone()),
-                )
-                .unwrap(),
+                WgpuBackendBuilder::new()
+                    .with_postprocessor(Box::new(CrtPostProcessorBuilder::new(
+                        CrtSettings::default(),
+                    )))
+                    .with_fonts([
+                        fallback_font().expect("fallback"),
+                        fallback_emoji_font().expect("emoji"),
+                    ])
+                    .with_backends("vulkan")
+                    .with_width_and_height(size.width, size.height)
+                    .build_with_target(self.window.as_ref().unwrap().clone())
+                    .unwrap()
             )
             .unwrap(),
         );
