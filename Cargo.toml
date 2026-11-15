@@ -48,7 +48,7 @@ winit = { version = "0.30", optional = true }
 [dev-dependencies]
 image = { version = "0.25", default-features = false, features = ["png"] }
 ratatui-widgets = { version = "0.3", default-features = false }
-rat-widget = { version = "3.3" }
+rat-widget = { version = "3.3", features = ["cli-clipboard"] }
 rat-theme4 = { version = "4.5" }
 serial_test = "4.0"
 futures-lite = "2.6"

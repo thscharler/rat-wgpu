@@ -12,6 +12,7 @@ use rat_widget::focus::{FocusBuilder, impl_has_focus};
 use rat_widget::menu::{MenuLine, MenuLineState};
 use rat_widget::msgdialog::{MsgDialog, MsgDialogState};
 use rat_widget::statusline_stacked::StatusLineStacked;
+use rat_widget::text::clipboard::cli::setup_cli_clipboard;
 use rat_widget::text::{HasScreenCursor, impl_screen_cursor};
 use rat_widget::textarea::{TextArea, TextAreaState};
 use ratatui_core::backend::Backend;
@@ -64,6 +65,7 @@ fn main() -> anyhow::Result<()> {
 
     let event_loop = EventLoop::builder().build()?;
 
+    setup_cli_clipboard();
     let theme = create_salsa_theme("Imperial Shell");
 
     let mut app = MinimalWinit {
@@ -136,7 +138,9 @@ impl ApplicationHandler for MinimalWinit {
             event_state: Default::default(),
             font_size: 20,
             window_focused: false,
-        })
+        });
+
+        init(&mut self.state, self.ctx.as_mut().expect("ctx")).expect("init");
     }
 
     fn window_event(
@@ -268,6 +272,13 @@ fn render_tui(area: Rect, buf: &mut Buffer, state: &mut MinimalState) {
                 .style(status_color_2),
         )
         .render(status_layout[1], buf);
+}
+
+fn init(state: &mut MinimalState, ctx: &mut MinimalContext) -> Result<(), ()> {
+    let focus = FocusBuilder::build_for(state);
+    focus.first();
+
+    Ok(())
 }
 
 fn process_event(
