@@ -25,6 +25,9 @@ use rustybuzz::{Face, GlyphBuffer, UnicodeBuffer, shape_with_plan};
 use std::mem;
 use std::num::NonZeroU64;
 use std::sync::{Arc, Mutex};
+#[cfg(feature = "timers")]
+use std::time::Duration;
+use std::time::SystemTime;
 use unicode_bidi::ParagraphBidiInfo;
 use unicode_properties::{
     GeneralCategory, GeneralCategoryGroup, UnicodeEmoji, UnicodeGeneralCategory,
@@ -78,6 +81,13 @@ pub struct WgpuBackend<'s> {
     pub(super) wgpu_post_process_changed: bool,
     pub(super) wgpu_post_process: Box<dyn PostProcessor + 'static>,
     pub(super) wgpu_pipeline: WgpuPipeline,
+
+    /// Timer for draw().
+    #[cfg(feature = "timers")]
+    pub draw_time: Duration,
+    /// Timer for flush().
+    #[cfg(feature = "timers")]
+    pub flush_time: Duration,
 }
 
 impl<'s> Backend for WgpuBackend<'s> {
@@ -87,6 +97,13 @@ impl<'s> Backend for WgpuBackend<'s> {
     where
         I: Iterator<Item = (u16, u16, &'a Cell)>,
     {
+        #[allow(unused_variables)]
+        let tt: SystemTime;
+        #[cfg(feature = "timers")]
+        {
+            tt = SystemTime::now();
+        }
+
         let bounds = self.size()?;
         draw_tui(
             bounds,
@@ -95,6 +112,12 @@ impl<'s> Backend for WgpuBackend<'s> {
             &mut self.tui_surface,
             &mut self.cell_glyphs,
         );
+
+        #[cfg(feature = "timers")]
+        {
+            self.draw_time = tt.elapsed().unwrap_or_default();
+        }
+
         Ok(())
     }
 
@@ -257,6 +280,13 @@ impl<'s> Backend for WgpuBackend<'s> {
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
+        #[allow(unused_variables)]
+        let tt: SystemTime;
+        #[cfg(feature = "timers")]
+        {
+            tt = SystemTime::now();
+        }
+
         let bounds = self.size()?;
 
         flush_tui(
@@ -294,6 +324,11 @@ impl<'s> Backend for WgpuBackend<'s> {
         self.wgpu_post_process_changed = false;
         self.wgpu_vertices.clear();
         drop_images(&mut self.tui_surface, &mut self.wgpu_images);
+
+        #[cfg(feature = "timers")]
+        {
+            self.flush_time = tt.elapsed().unwrap_or_default();
+        }
 
         Ok(())
     }

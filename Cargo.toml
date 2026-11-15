@@ -21,6 +21,8 @@ fallback_emoji_font = []
 fallback_symbol_font = []
 # Support fonts with png data.
 png = ["dep:png"]
+# Enable draw and flush timers
+timers = []
 
 # Support for winit events
 winit-event = ["dep:winit", "dep:crossterm"]

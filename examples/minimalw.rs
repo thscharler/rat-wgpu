@@ -1,5 +1,4 @@
 use crossterm::event::Event;
-use log::debug;
 use rat_theme4::palette::Colors;
 use rat_theme4::theme::SalsaTheme;
 use rat_theme4::{StyleName, WidgetStyle, create_salsa_theme};
@@ -14,7 +13,7 @@ use rat_widget::msgdialog::{MsgDialog, MsgDialogState};
 use rat_widget::statusline_stacked::StatusLineStacked;
 use rat_widget::text::clipboard::cli::setup_cli_clipboard;
 use rat_widget::text::{HasScreenCursor, impl_screen_cursor};
-use rat_widget::textarea::{TextArea, TextAreaState};
+use rat_widget::textarea::{TextArea, TextAreaState, TextWrap};
 use ratatui_core::backend::Backend;
 use ratatui_core::buffer::Buffer;
 use ratatui_core::layout;
@@ -26,6 +25,7 @@ use ratatui_core::widgets::{StatefulWidget, Widget};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use winit::application::ApplicationHandler;
+use winit::dpi::PhysicalSize;
 use winit::event::{StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
@@ -56,8 +56,13 @@ pub struct MinimalState {
     status: String,
 
     count: usize,
-    last_render: Duration,
+
     last_event: Duration,
+    last_render: Duration,
+    #[cfg(feature = "timers")]
+    last_draw: Duration,
+    #[cfg(feature = "timers")]
+    last_flush: Duration,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -79,6 +84,10 @@ fn main() -> anyhow::Result<()> {
             count: Default::default(),
             last_render: Default::default(),
             last_event: Default::default(),
+            #[cfg(feature = "timers")]
+            last_draw: Default::default(),
+            #[cfg(feature = "timers")]
+            last_flush: Default::default(),
         },
     };
     event_loop.run_app(&mut app)?;
@@ -107,6 +116,7 @@ impl ApplicationHandler for MinimalWinit {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // window
         let mut attr = WindowAttributes::default();
+        attr.inner_size = Some(winit::dpi::Size::Physical(PhysicalSize::new(700, 500)));
         attr.visible = false;
         let window = Arc::new(event_loop.create_window(attr).unwrap());
 
@@ -195,25 +205,35 @@ impl ApplicationHandler for MinimalWinit {
         }
 
         if rr == Outcome::Changed {
-            let ttt = SystemTime::now();
+            #[cfg(feature = "timers")]
+            {
+                self.state.last_draw = ctx.terminal.backend().draw_time;
+            }
+            #[cfg(feature = "timers")]
+            {
+                self.state.last_flush = ctx.terminal.backend().flush_time;
+            }
+
             let frame = ctx
                 .terminal
                 .draw(|frame| {
+                    let ttt = SystemTime::now();
+
                     let area = frame.area();
                     let buf = frame.buffer_mut();
 
                     render_tui(area, buf, &mut self.state);
 
                     let sc = self.state.screen_cursor();
-                    debug!("screen_cursor {:?}", sc);
                     if let Some(cursor) = sc {
                         frame.set_cursor_position(layout::Position::from(cursor));
                     }
+
+                    self.state.last_render = ttt.elapsed().expect("duration");
                 })
                 .expect("render");
 
             self.state.count = frame.count;
-            self.state.last_render = ttt.elapsed().expect("duration");
         }
     }
 }
@@ -236,6 +256,7 @@ fn render_tui(area: Rect, buf: &mut Buffer, state: &mut MinimalState) {
 
     TextArea::new()
         .styles(state.theme.style(WidgetStyle::TEXTAREA))
+        .text_wrap(TextWrap::Word(5))
         .render(layout[0], buf, &mut state.text);
 
     MenuLine::new()
@@ -254,27 +275,33 @@ fn render_tui(area: Rect, buf: &mut Buffer, state: &mut MinimalState) {
     let status_color_1 = state.theme.p.fg_bg_style(Colors::White, 0, Colors::Blue, 3);
     let status_color_2 = state.theme.p.fg_bg_style(Colors::White, 0, Colors::Blue, 2);
 
+    let timer_span;
+    #[cfg(feature = "timers")]
+    {
+        timer_span = Span::from(format!(
+            "render({:.0?}) draw({:.0?}) flush({:.0?})",
+            state.last_render, state.last_draw, state.last_flush
+        ))
+        .style(status_color_1)
+    }
+    #[cfg(not(feature = "timers"))]
+    {
+        timer_span = Span::from(format!("render({:.0?})", state.last_render)).style(status_color_1)
+    }
+
     StatusLineStacked::new()
         .style(state.theme.style(Style::STATUS_BASE))
         .center_margin(1)
         .center(Line::from(state.status.as_str()))
-        .end(
-            Span::from(format!(
-                " R({:03}){:05} ",
-                state.count,
-                format!("{:.0?}", state.last_render)
-            ))
-            .style(status_color_1),
-            Span::from(" "),
-        )
+        .end(timer_span, Span::from(" "))
         .end_bare(
-            Span::from(format!(" E{:05} ", format!("{:.0?}", state.last_event)))
+            Span::from(format!("event({:05})", format!("{:.0?}", state.last_event)))
                 .style(status_color_2),
         )
         .render(status_layout[1], buf);
 }
 
-fn init(state: &mut MinimalState, ctx: &mut MinimalContext) -> Result<(), ()> {
+fn init(state: &mut MinimalState, _ctx: &mut MinimalContext) -> Result<(), ()> {
     let focus = FocusBuilder::build_for(state);
     focus.first();
 

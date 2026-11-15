@@ -582,6 +582,10 @@ impl WgpuBackendBuilder {
                 text_fg_compositor,
                 img_compositor,
             },
+            #[cfg(feature = "timers")]
+            draw_time: Default::default(),
+            #[cfg(feature = "timers")]
+            flush_time: Default::default(),
         })
     }
 }
