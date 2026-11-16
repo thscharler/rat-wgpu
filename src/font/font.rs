@@ -1,3 +1,4 @@
+#[cfg(any(feature = "fallback_font", feature = "fallback_symbol_font", feature = "fallback_emoji_font"))]
 use fontdb::Source;
 use rustybuzz::Face;
 use rustybuzz::ttf_parser::{GlyphId, LineMetrics};
