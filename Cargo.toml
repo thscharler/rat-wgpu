@@ -11,7 +11,7 @@ keywords = ["ratatui", "wgpu", "backend"]
 categories = ["command-line-interface", "gui"]
 
 [features]
-default = ["winit-event", "fallback_font"]
+default = ["winit-event"]
 
 # Add NotoSansMono-Regular as fallback font.
 fallback_font = []
@@ -59,3 +59,6 @@ env_logger = "0.11"
 palette = "0.7"
 chrono = "0.4"
 
+[[example]]
+name = "minimalw"
+required-features = ["fallback_font"]
