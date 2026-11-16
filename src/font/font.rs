@@ -1,4 +1,8 @@
-#[cfg(any(feature = "fallback_font", feature = "fallback_symbol_font", feature = "fallback_emoji_font"))]
+#[cfg(any(
+    feature = "fallback_font",
+    feature = "fallback_symbol_font",
+    feature = "fallback_emoji_font"
+))]
 use fontdb::Source;
 use rustybuzz::Face;
 use rustybuzz::ttf_parser::{GlyphId, LineMetrics};
@@ -59,6 +63,7 @@ impl Debug for Font {
 }
 
 impl Font {
+    #[allow(clippy::needless_late_init)]
     /// Create a new Font from data. Returns [`None`] if the font cannot
     /// be parsed.
     ///
@@ -532,7 +537,7 @@ pub fn load_font_by_family(family: &str) -> Vec<Font> {
             .collect::<Vec<_>>()
     };
 
-    font_ids.into_iter().filter_map(|v| Font::new(v)).collect()
+    font_ids.into_iter().filter_map(Font::new).collect()
 }
 
 /// Load a specific font by exact name.

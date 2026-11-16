@@ -4,17 +4,17 @@
 //! Rendering an image works in two steps.
 //!
 //! * Call [WgpuBackend::add_image](crate::WgpuBackend::add_image) to pass
-//! the image data to the backend. You get back a handle for the image
-//! that will be used for the actual rendering. The images are stored
-//! as Textures in GPU memory and are freed when the last clone of the
-//! handle is dropped.
+//!   the image data to the backend. You get back a handle for the image
+//!   that will be used for the actual rendering. The images are stored
+//!   as Textures in GPU memory and are freed when the last clone of the
+//!   handle is dropped.
 //!
 //! * Get the [ImageBuffer] from the backend.
-//! Add the images you want to render during the normal
-//! [Terminal::draw](ratatui_core::terminal::Terminal) either with
-//! [ImageBuffer::render] or [ImageBuffer::render_px].
-//! It's ok to keep the ImageBuffer longer than the draw call, it will
-//! be flushed automatically.
+//!   Add the images you want to render during the normal
+//!   [Terminal::draw](ratatui_core::terminal::Terminal) either with
+//!   [ImageBuffer::render] or [ImageBuffer::render_px].
+//!   It's ok to keep the ImageBuffer longer than the draw call, it will
+//!   be flushed automatically.
 
 use crate::font::CellBox;
 use crate::util::intersect;
@@ -277,6 +277,7 @@ impl ImageBuffer {
         self.render_px(id, self.rect_px(area), arg)
     }
 
+    #[allow(clippy::manual_unwrap_or_default)]
     /// Render an image in the given area.
     ///
     /// To get an ImageHandle, add the image with

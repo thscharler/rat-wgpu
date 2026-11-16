@@ -294,7 +294,7 @@ impl WgpuBackendBuilder {
         mut self,
         target: impl Into<SurfaceTarget<'s>>,
     ) -> Result<WgpuBackend<'s>, Error> {
-        let backends = if self.backends == "*" || self.backends == "" {
+        let backends = if self.backends == "*" || self.backends.is_empty() {
             Backends::all()
         } else {
             Backends::from_comma_list(&self.backends)
@@ -349,7 +349,7 @@ impl WgpuBackendBuilder {
         mut self,
         mut surface: RenderSurface<'s>,
     ) -> Result<WgpuBackend<'s>, Error> {
-        let backends = if self.backends == "*" || self.backends == "" {
+        let backends = if self.backends == "*" || self.backends.is_empty() {
             Backends::all()
         } else {
             Backends::from_comma_list(&self.backends)
@@ -610,9 +610,7 @@ pub(super) fn build_wgpu_state(
         view_formats: &[],
     });
 
-    let text_dest_view = text_dest.create_view(&TextureViewDescriptor::default());
-
-    text_dest_view
+    text_dest.create_view(&TextureViewDescriptor::default())
 }
 
 pub(super) fn build_img_bindings(

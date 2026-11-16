@@ -355,7 +355,7 @@ pub fn winit_to_crossterm_event(
                         state.set_dead_key_released(None);
                         state.set_dead_key_pressed(None);
 
-                        if let Some(kc) = map_key_code(*nk, *location, &state) {
+                        if let Some(kc) = map_key_code(*nk, *location, state) {
                             Ok(crossterm::event::Event::Key(
                                 crossterm::event::KeyEvent::new_with_kind_and_state(
                                     kc,
@@ -391,7 +391,7 @@ pub fn winit_to_crossterm_event(
                 }
             }
             WindowEvent::CursorMoved { .. } => {
-                let ct_key_modifiers = map_modifiers(&state);
+                let ct_key_modifiers = map_modifiers(state);
 
                 if state.left_pressed() {
                     Ok(crossterm::event::Event::Mouse(
@@ -445,7 +445,7 @@ pub fn winit_to_crossterm_event(
                 delta: winit::event::MouseScrollDelta::LineDelta(_horizontal, vertical),
                 ..
             } => {
-                let ct_key_modifiers = map_modifiers(&state);
+                let ct_key_modifiers = map_modifiers(state);
 
                 Ok(crossterm::event::Event::Mouse(
                     crossterm::event::MouseEvent {
@@ -469,7 +469,7 @@ pub fn winit_to_crossterm_event(
                 let Some(ct_button) = map_mouse_button(*button) else {
                     break 'm Err(());
                 };
-                let ct_key_modifiers = map_modifiers(&state);
+                let ct_key_modifiers = map_modifiers(state);
 
                 Ok(crossterm::event::Event::Mouse(
                     crossterm::event::MouseEvent {

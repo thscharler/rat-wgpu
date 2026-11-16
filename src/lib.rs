@@ -13,8 +13,8 @@ pub mod postprocessor;
 mod text_atlas;
 pub(crate) mod util;
 
-pub use backend::backend::WgpuBackend;
-pub use backend::builder::WgpuBackendBuilder;
+pub use backend::WgpuBackend;
+pub use backend::WgpuBackendBuilder;
 
 #[derive(Debug)]
 pub enum Error {

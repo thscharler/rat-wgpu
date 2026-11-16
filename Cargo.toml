@@ -10,6 +10,15 @@ readme = "readme.md"
 keywords = ["ratatui", "wgpu", "backend"]
 categories = ["command-line-interface", "gui"]
 
+[lints.clippy]
+collapsible_else_if = "allow"
+collapsible_if = "allow"
+comparison_chain = "allow"
+result_unit_err = "allow"
+if_same_then_else = "allow"
+module_inception = "allow"
+too_many_arguments = "allow"
+
 [features]
 default = ["winit-event"]
 

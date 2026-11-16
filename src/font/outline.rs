@@ -1,4 +1,4 @@
-/// Converts the font data to a raquote path.
+//! Converts the font data to a raquote path.
 
 use raqote::{
     Color, DrawOptions, DrawTarget, Gradient, GradientStop, IntRect, Path, PathBuilder, Point,

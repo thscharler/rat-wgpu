@@ -618,7 +618,7 @@ impl<'s> WgpuBackend<'s> {
                 origin: Origin3d { x: 0, y: 0, z: 0 },
                 aspect: TextureAspect::All,
             },
-            bytemuck::cast_slice(&image),
+            bytemuck::cast_slice(image),
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(width * 4 * size_of::<u8>() as u32),
@@ -985,7 +985,7 @@ fn render_img(
         let img_texture = images.img.get(&img_info.image_id).expect("image");
         let img_bindings = build_img_bindings(
             &pipeline.img_compositor,
-            &device,
+            device,
             &pipeline.sampler,
             &img_texture.texture,
             &uv_transform_buffer,
@@ -1075,8 +1075,7 @@ fn draw_tui(
         let new_symbol_width = tui_surface.cells[index]
             .symbol()
             .chars()
-            .filter(|c| c.general_category() != GeneralCategory::Format)
-            .next()
+            .find(|c| c.general_category() != GeneralCategory::Format)
             .unwrap_or(' ')
             .width()
             .unwrap_or(1);
@@ -1174,7 +1173,7 @@ fn flush_tui(
     bounds: ratatui_core::layout::Size,
     fonts: &Fonts,
     tui_surface: &mut TuiSurface,
-    cell_glyphs: &mut Vec<CellGlyphs>,
+    cell_glyphs: &mut [CellGlyphs],
     wgpu_atlas: &mut WgpuAtlas,
     queue: &Queue,
     shape_plan: &mut PlanCache,
@@ -1221,7 +1220,7 @@ fn flush_tui(
         }
 
         // run text shaping
-        let bidi = ParagraphBidiInfo::new(&row_bytes, None);
+        let bidi = ParagraphBidiInfo::new(row_bytes, None);
         let (levels, runs) = bidi.visual_runs(0..bidi.levels.len());
 
         // when bidi kicks in dirty_cell ceases to work.
@@ -1274,8 +1273,8 @@ fn flush_tui(
                         row_cells,
                         &tui_surface.dirty_cells[row_offset..row_offset + bounds.width as usize],
                         &tui_surface.cell_remap[row_offset..row_offset + bounds.width as usize],
-                        &row_bytes,
-                        &row_bytes_to_cell,
+                        row_bytes,
+                        row_bytes_to_cell,
                         shape_with_plan(
                             &current_face,
                             shape_plan.get(current_font_id, current_font, &mut buffer),
@@ -1298,12 +1297,11 @@ fn flush_tui(
                     let symbol_width = row_cells[current_cell_idx as usize]
                         .symbol()
                         .chars()
-                        .filter(|c| c.general_category() != GeneralCategory::Format)
-                        .next()
+                        .find(|c| c.general_category() != GeneralCategory::Format)
                         .unwrap_or(' ')
                         .width()
                         .unwrap_or(1);
-                    current_cell_idx = current_cell_idx + symbol_width as i32;
+                    current_cell_idx += symbol_width as i32;
                 }
 
                 if start_cell_idx.is_none() {
@@ -1348,7 +1346,7 @@ fn flush_tui(
                 row_cells,
                 &tui_surface.dirty_cells[row_offset..row_offset + bounds.width as usize],
                 &tui_surface.cell_remap[row_offset..row_offset + bounds.width as usize],
-                &row_bytes,
+                row_bytes,
                 row_bytes_to_cell,
                 shape_with_plan(
                     &current_face,
@@ -1437,7 +1435,7 @@ fn shape(
             // zero width are still 1 cell wide.
             // there is KHMER SIGN BEYYAL with width 3.
             // we ignore that one completely.
-            first_chars_wide = ch.width().unwrap_or(1).max(1).min(2);
+            first_chars_wide = ch.width().unwrap_or(1).clamp(1, 2);
             chars_wide = first_chars_wide;
             assert_ne!(chars_wide, 0);
             active_advance = 0;
@@ -1448,7 +1446,7 @@ fn shape(
             // zero width are still 1 cell wide.
             // there is KHMER SIGN BEYYAL with width 3.
             // we ignore that one completely.
-            chars_wide = ch.width().unwrap_or(first_chars_wide).max(1).min(2);
+            chars_wide = ch.width().unwrap_or(first_chars_wide).clamp(1, 2);
             assert_ne!(chars_wide, 0);
         }
 
@@ -1565,7 +1563,7 @@ fn shape(
 
         let (cached, image) = rasterize_glyph(
             cached_glyph,
-            &metrics,
+            metrics,
             info,
             is_bold,
             is_italic,
@@ -1632,25 +1630,32 @@ fn flush_blink(
     bounds: ratatui_core::layout::Size,
     cell_box: CellBox,
     tui_surface: &mut TuiSurface,
-    rendered: &Vec<CellGlyphs>,
+    rendered: &[CellGlyphs],
     wgpu_vertices: &mut WgpuVertices,
 ) {
     wgpu_vertices.clear();
 
     tui_surface.blink = tui_surface.blink.wrapping_add(1);
     if tui_surface.fast_blink_divisor != 0
-        && tui_surface.blink % tui_surface.fast_blink_divisor == 0
+        && tui_surface
+            .blink
+            .is_multiple_of(tui_surface.fast_blink_divisor)
     {
         tui_surface.fast_blink_showing = !tui_surface.fast_blink_showing;
     }
     if tui_surface.slow_blink_divisor != 0
-        && tui_surface.blink % tui_surface.slow_blink_divisor == 0
+        && tui_surface
+            .blink
+            .is_multiple_of(tui_surface.slow_blink_divisor)
     {
         tui_surface.slow_blink_showing = !tui_surface.slow_blink_showing;
     }
 
     tui_surface.cursor_blink = tui_surface.cursor_blink.wrapping_add(1);
-    if tui_surface.cursor_divisor != 0 && tui_surface.cursor_blink % tui_surface.cursor_divisor == 0
+    if tui_surface.cursor_divisor != 0
+        && tui_surface
+            .cursor_blink
+            .is_multiple_of(tui_surface.cursor_divisor)
     {
         tui_surface.cursor_showing = !tui_surface.cursor_showing;
     }
@@ -1673,7 +1678,7 @@ fn flush_blink(
     let mut index_offset = 0;
     for index in cell_indexes.iter() {
         if let Some(to_render) = rendered.get(*index) {
-            append_rendered(&tui_surface, to_render, &mut index_offset, wgpu_vertices);
+            append_rendered(tui_surface, to_render, &mut index_offset, wgpu_vertices);
         }
     }
 
@@ -1720,7 +1725,7 @@ fn flush_blink(
 fn append_dirty_rows(
     tui_surface: &mut TuiSurface,
     wgpu_post_process: &dyn PostProcessor,
-    rendered: &Vec<CellGlyphs>,
+    rendered: &[CellGlyphs],
     wgpu_vertices: &mut WgpuVertices,
 ) {
     if wgpu_post_process.needs_update()
@@ -1794,6 +1799,7 @@ fn append_rendered_image(
     });
 }
 
+#[allow(clippy::identity_op)]
 fn append_rendered(
     tui_surface: &TuiSurface,
     to_render: &CellGlyphs,

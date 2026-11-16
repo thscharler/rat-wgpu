@@ -2,9 +2,7 @@ use std::cmp::{max, min};
 
 #[inline]
 pub(crate) fn clip_uv(a: (i32, i32, u32, u32), clip: (i32, i32, u32, u32)) -> Option<[f32; 4]> {
-    let Some(c) = intersect(a, clip) else {
-        return None;
-    };
+    let c = intersect(a, clip)?;
 
     let a0 = (a.0, a.1);
 

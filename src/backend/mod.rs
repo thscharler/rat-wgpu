@@ -15,10 +15,13 @@ use wgpu::{
     SurfaceConfiguration, Texture, TextureView,
 };
 
-pub(super) mod backend;
-pub(super) mod builder;
+mod backend;
+mod builder;
 mod plan_cache;
 mod surface;
+
+pub use backend::WgpuBackend;
+pub use builder::WgpuBackendBuilder;
 
 const NULL_CELL: Cell = {
     let mut c = Cell::new("");
@@ -48,8 +51,8 @@ struct ImageInfo {
     uv_transform: Transform,
 }
 
-/// List of glyphs for one cell. 
-/// Holds the offset for each glyph, some glyph-id and rendering details. 
+/// List of glyphs for one cell.
+/// Holds the offset for each glyph, some glyph-id and rendering details.
 type CellGlyphs = Vec<(i32, i32, GlyphId, RenderInfo)>;
 
 struct TuiSurface {

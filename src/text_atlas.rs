@@ -1,8 +1,8 @@
+use crate::font::CellBox;
 use evictor::Lru;
 use ratatui_core::style::Modifier;
 use std::num::NonZeroUsize;
 use std::ops::Deref;
-use crate::font::CellBox;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 pub(crate) struct Key {
@@ -107,7 +107,7 @@ impl Atlas {
             );
         }
         #[cfg(debug_assertions)]
-        if self.entry_width % width != 0 {
+        if !self.entry_width.is_multiple_of(width) {
             panic!(
                 "{:?} width = {}: Internal width not a multiple of provided width. Did you forget to call match_fonts?",
                 key, width
